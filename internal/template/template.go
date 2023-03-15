@@ -4,7 +4,8 @@ import (
 	"github.com/Masterminds/goutils"
 	"github.com/Masterminds/sprig/v3"
 	"github.com/librucha/krmgen/internal/template/argocd"
-	"github.com/librucha/krmgen/internal/template/azure"
+	azsec "github.com/librucha/krmgen/internal/template/azure/sec"
+	azstorage "github.com/librucha/krmgen/internal/template/azure/storage"
 	"github.com/librucha/krmgen/internal/template/files"
 	"github.com/librucha/krmgen/internal/template/kube"
 	"strings"
@@ -18,7 +19,9 @@ func initFuncs(t *template.Template) {
 	delete(funcs, "expandenv")
 
 	// Add Azure key vault secrets
-	funcs[azure.SecFunc] = azure.ResolveSecret
+	funcs[azsec.SecFunc] = azsec.ResolveSecret
+	// Add Azure storage key
+	funcs[azstorage.StoreKeyFunc] = azstorage.GetStoreKey
 
 	// Add ArgoCD env function
 	funcs[argocd.EnvFunc] = argocd.ResolveArgocdEnv

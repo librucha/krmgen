@@ -30,6 +30,7 @@ type generator interface {
 	idProvider
 	authenticator
 	configProvider
+	addRepoArgs([]string) []string
 }
 
 func newGenerator(config *types.HelmChart) (generator, error) {

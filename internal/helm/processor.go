@@ -60,9 +60,10 @@ func templateHelm(generator generator, workDir string) (string, error) {
 	args := []string{
 		"template",
 		config.ReleaseName,
-		generator.chartId(),
 		"--include-crds",
 	}
+
+	args = generator.addRepoArgs(args)
 
 	if credentialsProvided(generator.getConfig()) {
 		generator.login()

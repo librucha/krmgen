@@ -1,4 +1,4 @@
-package azure
+package azsec
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const SecFunc = "azureSec"
+const SecFunc = "azSec"
 
 var azureClients = make(map[string]*azsecrets.Client, 10)
 
@@ -35,7 +35,7 @@ func getSecretFromAzure(vaultName string, keyId string, keyVer string) (string, 
 	if err != nil {
 		return "", err
 	}
-	secret, err := client.GetSecret(context.TODO(), keyId, keyVer, nil)
+	secret, err := client.GetSecret(context.Background(), keyId, keyVer, nil)
 	if err != nil {
 		return "", err
 	}

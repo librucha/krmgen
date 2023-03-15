@@ -1,4 +1,4 @@
-package azure
+package azsec
 
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -55,9 +55,9 @@ func Test_getSecretFromCache(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			//value := "secretValue"
-			//id := newId(tt.args.vaultName, tt.args.keyId, tt.args.keyVer)
-			//var secret = azsecrets.SecretBundle{
+			// value := "secretValue"
+			// id := newId(tt.args.vaultName, tt.args.keyId, tt.args.keyVer)
+			// var secret = azsecrets.SecretBundle{
 			//	Attributes:  nil,
 			//	ContentType: nil,
 			//	ID:          &id,
@@ -65,9 +65,9 @@ func Test_getSecretFromCache(t *testing.T) {
 			//	Value:       &value,
 			//	Kid:         nil,
 			//	Managed:     nil,
-			//}
+			// }
 
-			//cachedSecrets = map[azsecrets.ID]*azsecrets.SecretBundle{id: &secret}
+			// cachedSecrets = map[azsecrets.ID]*azsecrets.SecretBundle{id: &secret}
 			got, err := getSecretFromAzure(tt.args.vaultName, tt.args.keyId, tt.args.keyVer)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getSecretFromAzure() error = %v, wantErr %v", err, tt.wantErr)

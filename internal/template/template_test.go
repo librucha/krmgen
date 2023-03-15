@@ -17,6 +17,11 @@ func Test_EvalGoTemplates(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name: "builtin function",
+			args: args{`Prefix {{ print "hello" }} suffix`},
+			want: "Prefix hello suffix",
+		},
+		{
 			name: "sprig function",
 			args: args{`Prefix {{ upper "hello" }} suffix`},
 			want: "Prefix HELLO suffix",
@@ -44,26 +49,33 @@ func Test_EvalGoTemplates(t *testing.T) {
 		},
 		// Azure secrets
 		{
-			name: "azureSec function",
-			args: args{`Prefix {{ azureSec "some-vault" "some-secret" }} suffix`},
-			// args: args{`Prefix {{ azureSec "vault_name" "key_id" }} suffix`},
+			name: "azSec function",
+			args: args{`Prefix {{ azSec "some-vault" "some-secret" }} suffix`},
+			// args: args{`Prefix {{ azSec "vault_name" "key_id" }} suffix`},
 			want: "Prefix secretValue suffix",
 		},
 		{
-			name: "azureSec function with version",
-			// args: args{`Prefix {{ azureSec "vault_name" "key_id" "key_version" }} suffix`},
-			args: args{`Prefix {{ azureSec "some-vault" "some-secret" "2d5b71a61fca4a269a735216f6f1ec8f" }} suffix`},
+			name: "azSec function with version",
+			// args: args{`Prefix {{ azSec "vault_name" "key_id" "key_version" }} suffix`},
+			args: args{`Prefix {{ azSec "some-vault" "some-secret" "2d5b71a61fca4a269a735216f6f1ec8f" }} suffix`},
 			want: "Prefix LAe9cFYtnG2NZmVYur5MVVLV5zYYC2NNAhEFTSjLEh78MTcrdGP5aa6G78nPYwaJ suffix",
 		},
 		{
-			name:    "azureSec function without id",
-			args:    args{`Prefix {{ azureSec }} suffix`},
+			name:    "azSec function without id",
+			args:    args{`Prefix {{ azSec }} suffix`},
 			wantErr: true,
 		},
 		{
-			name:    "azureSec function with too many args",
-			args:    args{`Prefix {{ azureSec "1" "2" "3" "4" }} suffix`},
+			name:    "azSec function with too many args",
+			args:    args{`Prefix {{ azSec "1" "2" "3" "4" }} suffix`},
 			wantErr: true,
+		},
+		// Azure Storage key
+		{
+			name:    "azStoreKey",
+			args:    args{`Prefix {{ azStoreKey "subscription-id" "some-resource-group" "someazurestorage" }} suffix`},
+			want:    "Prefix XXYYZZ0123456789ZZYYXX suffix",
+			wantErr: false,
 		},
 		// ArgoCD env
 		{
@@ -80,6 +92,13 @@ func Test_EvalGoTemplates(t *testing.T) {
 			name: "argocd not existing env with default",
 			args: args{`Prefix {{ argocdEnv "KRMGEN_UNKNOWN_ENV_KEY" "fallback value" }} suffix`},
 			want: "Prefix fallback value suffix",
+		},
+		// unknown func
+		{
+			name:    "unknown func",
+			args:    args{"Prefix {{`{{ anyTotallyUnknownFunc }}`}} suffix"},
+			want:    `Prefix {{ anyTotallyUnknownFunc }} suffix`,
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {

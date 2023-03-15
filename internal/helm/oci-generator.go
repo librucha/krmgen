@@ -48,6 +48,10 @@ func (g ociHelmGenerator) addCredentials(in []string) []string {
 	return append(in, credentialsArgs(g.config)...)
 }
 
+func (g ociHelmGenerator) addRepoArgs(in []string) []string {
+	return append(in, g.config.RepoUrl)
+}
+
 func newOciHelmGenerator(config *types.HelmChart) ociHelmGenerator {
 	return ociHelmGenerator{config}
 }
