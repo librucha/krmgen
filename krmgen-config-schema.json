@@ -4,12 +4,6 @@
   "title": "Krm Generator Config",
   "type": "object",
   "properties": {
-    "$schema": {
-      "type": "string",
-      "enum": [
-        "https://github.com/librucha/krmgen/krmgen.config.schema"
-      ]
-    },
     "apiVersion": {
       "type": "string",
       "description": "Version of definition api",
