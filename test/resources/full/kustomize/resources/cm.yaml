@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  key: value
+  variable: ${env:PWD:}
+kind: ConfigMap
+metadata:
+  name: test-cm

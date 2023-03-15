@@ -1,0 +1,7 @@
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+type: Opaque
+data:
+  password: <path:vault-storage#secret-key>

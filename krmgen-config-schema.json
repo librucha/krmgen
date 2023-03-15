@@ -1,0 +1,92 @@
+{
+  "$id": "https://github.com/librucha/krmgen/raw/main/krmgen-config-schema.json",
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Krm Generator Config",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "enum": [
+        "https://github.com/librucha/krmgen/krmgen.config.schema"
+      ]
+    },
+    "apiVersion": {
+      "type": "string",
+      "description": "Version of definition api",
+      "enum": [
+        "krmgen.config.librucha.com/v1alpha1"
+      ]
+    },
+    "kind": {
+      "type": "string",
+      "description": "Kubernetes like Kind",
+      "const": [
+        "KrmGen"
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "object",
+          "description": "Labels are NOT propagated to target resources"
+        },
+        "annotations": {
+          "type": "object",
+          "description": "Annotations are NOT propagated to target resources"
+        }
+      }
+    },
+    "helm": {
+      "type": "object",
+      "description": "Helm resources definition",
+      "properties": {
+        "charts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Helm chart name"
+              },
+              "repo": {
+                "type": "string",
+                "description": "Helm repo URI. oci:// is supported"
+              },
+              "repoUser": {
+                "type": "string",
+                "description": "Helm repository username."
+              },
+              "repoPassword": {
+                "type": "string",
+                "description": "Helm repository password. Use of env variable is strongly recommended."
+              },
+              "releaseName": {
+                "type": "string",
+                "description": "Helm release name"
+              },
+              "version": {
+                "type": "string",
+                "description": "Helm chart version"
+              },
+              "valuesInline": {
+                "type": "object",
+                "description": "Helm values in-line",
+                "patternProperties": {
+                  ".*": {
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "valuesFile": {
+                "type": "string",
+                "description": "Relative path to Helm values file"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

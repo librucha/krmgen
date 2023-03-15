@@ -1,0 +1,32 @@
+apiVersion: krmgen.config.librucha.com/v1alpha1
+kind: KrmGen
+$schema: https://github.com/librucha/krmgen/krmgen.config.schema
+metadata:
+  annotations:
+    krmgen.io/plugin: some-plugin
+  labels:
+    app.kubernetes.io/name: krmgen-controller
+helm:
+  charts:
+    - name: helm-app
+      repo: oci://helm.registry.io/helm/
+      repoUser: ${env:MY_USERNAME:krmgenUser}
+      repoPassword: ${env:MY_PASSWORD:}
+      releaseName: ${env:MY_APP_NAME}
+      version: 5.4.3
+      valuesInline:
+        appVersion: 1.0.0
+        name: test
+        profile: ${env:MY_APP_PROFILE}
+        logging:
+          enabled: true
+      valuesFile: ''
+kustomize:
+  configInline:
+    apiVersion: kustomize.config.k8s.io/v1beta1
+    kind: Kustomization
+    namespace: ${env:MY_NAMESPACE:default}
+    resources:
+      - kustomize/resources/cm.yaml
+      - kustomize/resources/sec.yaml
+  configFile: ''
