@@ -2,6 +2,7 @@ package azsec
 
 import (
 	"context"
+	"encoding/pem"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
@@ -9,12 +10,13 @@ import (
 )
 
 const SecFunc = "azSec"
+const ToPemFunc = "toPem"
 
 var azureClients = make(map[string]*azsecrets.Client, 10)
 
 var cachedSecrets = make(map[azsecrets.ID]*azsecrets.SecretBundle, 50)
 
-func ResolveSecret(vaultName string, keyArgs ...string) (any, error) {
+func GetSecret(vaultName string, keyArgs ...string) (any, error) {
 	switch len(keyArgs) {
 	case 1:
 		return getSecretFromAzure(vaultName, keyArgs[0], "")
@@ -23,6 +25,14 @@ func ResolveSecret(vaultName string, keyArgs ...string) (any, error) {
 	default:
 		return nil, fmt.Errorf("wrong arguments count for function %q expected 1 or 2 aruments but got %d", SecFunc, len(keyArgs))
 	}
+}
+
+func ToPemBlock(blockType string, text string) (string, error) {
+	block := &pem.Block{
+		Type:  blockType,
+		Bytes: []byte(text),
+	}
+	return string(pem.EncodeToMemory(block)), nil
 }
 
 func getSecretFromAzure(vaultName string, keyId string, keyVer string) (string, error) {

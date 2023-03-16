@@ -110,7 +110,7 @@ func Test_EvalGoTemplates(t *testing.T) {
 				return
 			}
 			if got != tt.want {
-				t.Errorf("EvalGoTemplates() got = %v, want %v", got, tt.want)
+				t.Errorf("EvalGoTemplates() got = %s, want %s", got, tt.want)
 			}
 		})
 	}

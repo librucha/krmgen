@@ -4,6 +4,8 @@ import (
 	"github.com/Masterminds/goutils"
 	"github.com/Masterminds/sprig/v3"
 	"github.com/librucha/krmgen/internal/template/argocd"
+	azcert "github.com/librucha/krmgen/internal/template/azure/cert"
+	azkey "github.com/librucha/krmgen/internal/template/azure/key"
 	azsec "github.com/librucha/krmgen/internal/template/azure/sec"
 	azstorage "github.com/librucha/krmgen/internal/template/azure/storage"
 	"github.com/librucha/krmgen/internal/template/files"
@@ -19,7 +21,12 @@ func initFuncs(t *template.Template) {
 	delete(funcs, "expandenv")
 
 	// Add Azure key vault secrets
-	funcs[azsec.SecFunc] = azsec.ResolveSecret
+	funcs[azsec.SecFunc] = azsec.GetSecret
+	funcs[azsec.ToPemFunc] = azsec.ToPemBlock
+	// Add Azure key vault certificates
+	funcs[azcert.CertFunc] = azcert.ResolveCert
+	// Add Azure key vault keys
+	funcs[azkey.KeyFunc] = azkey.ResolveKey
 	// Add Azure storage key
 	funcs[azstorage.StoreKeyFunc] = azstorage.GetStoreKey
 
