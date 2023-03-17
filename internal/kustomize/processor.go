@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -85,12 +84,9 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 	if err != nil {
 		log.Fatalf("template evaluation of result failed error: %s", err)
 	}
-	evaluatedBytes := []byte(evaluated)
-	if !reflect.DeepEqual(fileContent, evaluatedBytes) {
-		err := os.WriteFile(kustomizeFile, evaluatedBytes, os.ModePerm)
-		if err != nil {
-			log.Fatalf("writing evaluated kustomize file %q failed error: %s", kustomizeFile, err)
-		}
+	err = os.WriteFile(kustomizeFile, []byte(evaluated), os.ModePerm)
+	if err != nil {
+		log.Fatalf("writing evaluated kustomize file %q failed error: %s", kustomizeFile, err)
 	}
 
 	if resourcesFile != "" {
