@@ -4,8 +4,6 @@ import (
 	"github.com/librucha/krmgen/internal"
 	"github.com/librucha/krmgen/internal/helm"
 	"github.com/librucha/krmgen/internal/kustomize"
-	"github.com/librucha/krmgen/internal/template"
-	"log"
 	"strings"
 )
 
@@ -24,10 +22,6 @@ func ProcessConfig(config *types.Config, workDir string) (string, error) {
 		resources.Reset()
 		resources.WriteString(kustomizeResources)
 	}
-	// evaluate templates
-	evaluated, err := template.EvalGoTemplates(resources.String())
-	if err != nil {
-		log.Fatalf("template evaluation of result failed error: %s", err)
-	}
-	return evaluated, nil
+
+	return resources.String(), nil
 }

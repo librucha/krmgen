@@ -3,6 +3,7 @@ package kustomize
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/librucha/krmgen/internal/template"
 	"github.com/librucha/krmgen/internal/tool"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
@@ -10,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -78,6 +80,18 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 	if err != nil {
 		log.Fatalf("reading kustomization file %q failed error: %s", kustomizeFile, err)
 	}
+	// evaluate templates
+	evaluated, err := template.EvalGoTemplates(string(fileContent))
+	if err != nil {
+		log.Fatalf("template evaluation of result failed error: %s", err)
+	}
+	evaluatedBytes := []byte(evaluated)
+	if !reflect.DeepEqual(fileContent, evaluatedBytes) {
+		err := os.WriteFile(kustomizeFile, evaluatedBytes, os.ModePerm)
+		if err != nil {
+			log.Fatalf("writing evaluated kustomize file %q failed error: %s", kustomizeFile, err)
+		}
+	}
 
 	if resourcesFile != "" {
 		err = yaml.Unmarshal(fileContent, &kustomizeFileYaml)
@@ -102,7 +116,7 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 		if err != nil {
 			log.Fatalf("marshaling updated file content failed error: %s", err)
 		}
-		err = os.WriteFile(kustomizeFile, []byte(updatedFileContent), os.ModePerm)
+		err = os.WriteFile(kustomizeFile, updatedFileContent, os.ModePerm)
 		if err != nil {
 			log.Fatalf("writing updated kustomize file %q failed error: %s", kustomizeFile, err)
 		}

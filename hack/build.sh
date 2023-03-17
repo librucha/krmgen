@@ -69,11 +69,22 @@ OUTPUT=${OUTPUT_DIR}/${BIN}
 if [[ "${GOOS}" = "windows" ]]; then
   OUTPUT="${OUTPUT}.exe"
 fi
+DIST=${OUTPUT_DIR}/${GOOS}_${GOARCH}_${BIN}
+if [[ "${GOOS}" = "windows" ]]; then
+  DIST="${DIST}.exe"
+fi
 
 echo "Building ${GOOS}-${GOARCH} binary"
 
 go build \
   -o "${OUTPUT}" \
+  -gcflags "${GCFLAGS}" \
+  -installsuffix "static" \
+  -ldflags "${LDFLAGS}" \
+  "${PKG}"
+
+go build \
+  -o "${DIST}" \
   -gcflags "${GCFLAGS}" \
   -installsuffix "static" \
   -ldflags "${LDFLAGS}" \
