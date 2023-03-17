@@ -69,7 +69,7 @@ OUTPUT=${OUTPUT_DIR}/${BIN}
 if [[ "${GOOS}" = "windows" ]]; then
   OUTPUT="${OUTPUT}.exe"
 fi
-DIST=${OUTPUT_DIR}/${GOOS}_${GOARCH}_${BIN}
+DIST=${OUTPUT_DIR}/${BIN}_${GOOS}_${GOARCH}
 if [[ "${GOOS}" = "windows" ]]; then
   DIST="${DIST}.exe"
 fi
