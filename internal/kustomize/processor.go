@@ -45,7 +45,7 @@ func FindKustomizeFile(workDir string) string {
 
 func BuildKustomize(kustomizeFile string, workDir string, resources string) string {
 	if kustomizeFile == "" {
-		log.Fatalf("no given kustomizeFile parmater")
+		log.Fatalf("no given kustomizeFile parameter")
 	}
 	var resourcesFile string
 	if resources != "" {
@@ -72,21 +72,14 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 
 	// backup kustomize file
 	backupFile(kustomizeFile)
+	// evaluate templates
+	evaluateTemplates(kustomizeFile)
 
 	// add resources to kustomize file
 	var kustomizeFileYaml map[string]any
 	fileContent, err := os.ReadFile(kustomizeFile)
 	if err != nil {
 		log.Fatalf("reading kustomization file %q failed error: %s", kustomizeFile, err)
-	}
-	// evaluate templates
-	evaluated, err := template.EvalGoTemplates(string(fileContent))
-	if err != nil {
-		log.Fatalf("template evaluation of result failed error: %s", err)
-	}
-	err = os.WriteFile(kustomizeFile, []byte(evaluated), os.ModePerm)
-	if err != nil {
-		log.Fatalf("writing evaluated kustomize file %q failed error: %s", kustomizeFile, err)
 	}
 
 	if resourcesFile != "" {
@@ -129,6 +122,22 @@ func backupFile(kustomizeFile string) {
 		if err != nil {
 			log.Printf("backup of kustomize file %s failed. skipping backup!", kustomizeFile)
 		}
+	}
+}
+
+func evaluateTemplates(kustomizeFile string) {
+	// evaluate templates
+	fileContent, err := os.ReadFile(kustomizeFile)
+	if err != nil {
+		log.Fatalf("reading kustomization file %q failed error: %s", kustomizeFile, err)
+	}
+	evaluated, err := template.EvalGoTemplates(string(fileContent))
+	if err != nil {
+		log.Fatalf("template evaluation of result failed error: %s", err)
+	}
+	err = os.WriteFile(kustomizeFile, []byte(evaluated), os.ModePerm)
+	if err != nil {
+		log.Fatalf("writing evaluated kustomize file %q failed error: %s", kustomizeFile, err)
 	}
 }
 
