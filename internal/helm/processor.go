@@ -62,6 +62,9 @@ func templateHelm(generator generator, workDir string) (string, error) {
 		config.ReleaseName,
 		"--include-crds",
 	}
+	if config.Version != "" {
+		args = append(args, "--version", config.Version)
+	}
 
 	args = generator.addRepoArgs(args)
 

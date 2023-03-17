@@ -9,6 +9,7 @@ import (
 	azsec "github.com/librucha/krmgen/internal/template/azure/sec"
 	azstorage "github.com/librucha/krmgen/internal/template/azure/storage"
 	"github.com/librucha/krmgen/internal/template/files"
+	"github.com/librucha/krmgen/internal/template/krmgen"
 	"github.com/librucha/krmgen/internal/template/kube"
 	"strings"
 	"text/template"
@@ -19,6 +20,10 @@ func initFuncs(t *template.Template) {
 	// Deleted for security reasons
 	delete(funcs, "env")
 	delete(funcs, "expandenv")
+
+	// Add Krmgen functions
+	funcs[krmgen.VersionFunc] = krmgen.ResolveKrmgenVersion
+	funcs[krmgen.GeneratedFunc] = krmgen.ResolveKrmgenGenerated
 
 	// Add Azure key vault secrets
 	funcs[azsec.SecFunc] = azsec.GetSecret

@@ -90,7 +90,7 @@ func Test_EvalGoTemplates(t *testing.T) {
 		},
 		{
 			name: "argocd not existing env with default",
-			args: args{`Prefix {{ argocdEnv "KRMGEN_UNKNOWN_ENV_KEY" "fallback value" }} suffix`},
+			args: args{`tls.key: '{{ azSec "rixocz-cert-vault" "rixo-ca-key" | b64dec | toPem "RSA PRIVATE KEY" | b64enc }}'`},
 			want: "Prefix fallback value suffix",
 		},
 		// unknown func

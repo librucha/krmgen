@@ -1,10 +1,9 @@
 package cmd
 
 import (
+	"github.com/librucha/krmgen/version"
 	"github.com/spf13/cobra"
 )
-
-var appVersion string
 
 func NewRootCommand() *cobra.Command {
 	var command = &cobra.Command{
@@ -13,12 +12,8 @@ func NewRootCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.HelpFunc()(cmd, args)
 		},
-		Version: appVersion,
+		Version: version.AppVersion,
 	}
 	command.AddCommand(NewGenerateCommand())
 	return command
-}
-
-func SetAppVersion(version string) {
-	appVersion = version
 }
