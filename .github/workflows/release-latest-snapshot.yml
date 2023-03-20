@@ -3,8 +3,8 @@ permissions:
   contents: write
 on:
   push:
-    branches:
-      - 'feature/**'
+    tags:
+      - 'latest-snapshot'
 
 jobs:
   publishFeature:
@@ -16,17 +16,10 @@ jobs:
           go-version: '^1.20'
           check-latest: true
 
-      - name: Create tag
-        run: |
-          git tag -f latest-snapshot
-          git push -f --tags
-
       - name: Build feature platforms
         run: |
           sudo apt-get install rhash -y
           make all-dist CLI_PLATFORMS="darwin-amd64 linux-amd64"
-
-      - uses: actions/checkout@v3
 
       - name: Release
         uses: softprops/action-gh-release@v1

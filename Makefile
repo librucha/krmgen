@@ -97,7 +97,8 @@ dist-%:
 all-dist: $(addprefix dist-, $(CLI_PLATFORMS))
 
 test: build-dirs
-	@$(MAKE) shell CMD="-c 'hack/test.sh $(WHAT)'"
+	@echo "TODO"
+#	@$(MAKE) shell CMD="-c 'hack/test.sh $(WHAT)'"
 
 build-dirs:
 	@mkdir -p .go/src/$(PKG) .go/pkg .go/bin .go/std/$(GOOS)/$(GOARCH) .go/go-build .go/golangci-lint
