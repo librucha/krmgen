@@ -45,7 +45,7 @@ local-build: clean build-dirs
 	GIT_SHA=$(GIT_SHA) \
 	GIT_TREE_STATE=$(GIT_TREE_STATE) \
 	OUTPUT_DIR=$$(pwd)/$(OUT_DIR) \
-	MAKE_CHECKSUMS=true \
+	MAKE_CHECKSUMS=false \
 	./hack/build.sh
 
 $(OUT_DIR)/bin/$(GOOS)/$(GOARCH)/$(BIN): build-dirs
@@ -73,7 +73,7 @@ $(OUT_DIR)/dist/$(GOOS)/$(GOARCH)/$(BIN): build-dirs
 	GIT_SHA=$(GIT_SHA) \
 	GIT_TREE_STATE=$(GIT_TREE_STATE) \
 	OUTPUT_DIR=$$(pwd)/$(OUT_DIR) \
-	MAKE_CHECKSUMS=false \
+	MAKE_CHECKSUMS=true \
 	./hack/build.sh
 
 # Example: make shell CMD="date > datefile"
