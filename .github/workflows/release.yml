@@ -1,0 +1,51 @@
+name: Release YQ
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'draft-*'
+
+jobs:
+  publishGitRelease:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '^1.20'
+          check-latest: true
+      - name: Compile man page markup
+        id: gen-man-page-md
+        run: |
+          ./scripts/generate-man-page-md.sh
+
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF##*/}" >> "${GITHUB_OUTPUT}"
+
+#      - name: Generate man page
+#        uses: docker://pandoc/core:2.14.2
+#        id: gen-man-page
+#        with:
+#          args: >-
+#            --standalone
+#            --to man
+#            --variable=title:"KrmGen"
+#            --variable=section:"1"
+#            --variable=header:"yq (https://github.com/librucha/krmgen/) version ${{ steps.get_version.outputs.VERSION }}"
+#            --variable=author:"Libor Ondrusek"
+#            --output=krmgen.1
+#            man.md
+
+      - name: Build all platforms
+        run: |
+          sudo apt-get install rhash -y
+          go install github.com/mitchellh/gox@v1.0.1
+          make all
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/*
+          draft: true
+          fail_on_unmatched_files: true
