@@ -41,11 +41,11 @@ jobs:
         run: |
           sudo apt-get install rhash -y
           go install github.com/mitchellh/gox@v1.0.1
-          make build
+          make dist
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: build/**
+          files: build/*
           draft: true
           fail_on_unmatched_files: true

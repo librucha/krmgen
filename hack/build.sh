@@ -69,10 +69,6 @@ OUTPUT=${OUTPUT_DIR}/${BIN}
 if [[ "${GOOS}" = "windows" ]]; then
   OUTPUT="${OUTPUT}.exe"
 fi
-DIST=${OUTPUT_DIR}/${BIN}_${GOOS}_${GOARCH}
-if [[ "${GOOS}" = "windows" ]]; then
-  DIST="${DIST}.exe"
-fi
 
 echo "Building ${GOOS}-${GOARCH} binary"
 
@@ -83,9 +79,12 @@ go build \
   -ldflags "${LDFLAGS}" \
   "${PKG}"
 
-go build \
-  -o "${DIST}" \
-  -gcflags "${GCFLAGS}" \
-  -installsuffix "static" \
-  -ldflags "${LDFLAGS}" \
-  "${PKG}"
+cd "${OUTPUT_DIR}"
+
+if [[ "${MAKE_CHECKSUMS}" = true ]]; then
+  rhash -r -a . -o checksums
+  rhash --list-hashes > checksums_hashes_order
+  cp ../hack/extract-checksum.sh .
+fi
+
+tar czvf "${OUTPUT}.tar.gz" "${OUTPUT}"
