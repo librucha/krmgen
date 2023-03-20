@@ -28,5 +28,5 @@ func getKubeEnvValue(key string, fallback *string) (string, error) {
 	if fallback != nil {
 		return *fallback, nil
 	}
-	return "", fmt.Errorf("ArgoCD Kube env value %q not found in env and default value not provided", kubeKey)
+	return "", fmt.Errorf("ArgoCD Kube env value %s not found in env and default value not provided", kubeKey)
 }

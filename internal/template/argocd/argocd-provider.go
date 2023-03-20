@@ -36,5 +36,5 @@ func getArgocdEnvValue(key string, fallback *string) (string, error) {
 	if fallback != nil {
 		return *fallback, nil
 	}
-	return "", fmt.Errorf("ArgoCD env value %q not found in env and default value not provided", argocdKey)
+	return "", fmt.Errorf("ArgoCD env value %s not found in env and default value not provided", argocdKey)
 }

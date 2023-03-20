@@ -1,4 +1,7 @@
 OUT_DIR ?= build
+DIST_DIR ?= dist
+DOCKER_REPO ?= librucha/krmgen
+DOCKER_LATEST ?= false
 
 # The binary to build (just the basename).
 BIN ?= krmgen
@@ -97,7 +100,16 @@ dist-%:
 all-dist: $(addprefix dist-, $(CLI_PLATFORMS))
 
 test: build-dirs
-	@$(MAKE) shell CMD="-c 'hack/test.sh $(WHAT)'"
+	./hack/test.sh
 
 build-dirs:
 	@mkdir -p .go/src/$(PKG) .go/pkg .go/bin .go/std/$(GOOS)/$(GOARCH) .go/go-build .go/golangci-lint
+
+docker-build: docker-build-alpine
+
+docker-build-%: build-linux-amd64
+	@docker build --progress plain --file $(DIST_DIR)/docker/Dockerfile-$* --build-arg KRMGEN_VERSION=$(VERSION) --tag $(DOCKER_REPO):$(VERSION) --tag $(DOCKER_REPO):latest .
+
+docker-release: docker-build
+	@ docker push $(DOCKER_REPO):$(VERSION)
+	@ docker push $(DOCKER_REPO):latest
