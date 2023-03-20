@@ -1,5 +1,16 @@
 name: Build
-on: [ push, pull_request ]
+on:
+  push:
+    branches:
+      - 'develop'
+      - 'feature/**'
+      - 'release/**'
+      - 'main'
+    tags-ignore:
+      - 'v*'
+      - 'draft-*'
+
+
 permissions:
   contents: read
 

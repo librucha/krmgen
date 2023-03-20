@@ -11,8 +11,7 @@ PKG := github.com/librucha/krmgen
 ###
 
 # Which architecture to build - see $(ALL_ARCH) for options.
-#ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
-ARCH ?= linux-amd64
+ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
 
 VERSION ?= main
 
