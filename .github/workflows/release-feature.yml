@@ -20,7 +20,7 @@ jobs:
         uses: actions/github-script@v5
         with:
           script: |
-            git tag latest-snapshot
+            git tag -f latest-snapshot
             git push -f --tags
 
       - name: Build feature platforms
