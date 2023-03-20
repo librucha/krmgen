@@ -29,4 +29,4 @@ jobs:
         shell: bash -l {0}
         run: |
           export PATH=${PATH}:`go env GOPATH`/bin
-          make all
+          make build
