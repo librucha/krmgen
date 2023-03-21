@@ -82,19 +82,27 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 		log.Fatalf("reading kustomization file %q failed error: %s", kustomizeFile, err)
 	}
 
+	err = yaml.Unmarshal(fileContent, &kustomizeFileYaml)
+	if err != nil {
+		log.Fatalf("unmarshaling kustomize file %q failed error: %s", kustomizeFile, err)
+	}
+	res, ok := kustomizeFileYaml["resources"]
+	if !ok {
+		res = []any{}
+	}
+	kustomizeResources, err := unwrapResources(res)
+	if err != nil {
+		log.Fatalf("unwraping resources from %q failed error: %s", kustomizeFile, err)
+	}
+
+	for _, resourceFile := range kustomizeResources {
+		if !strings.HasPrefix(resourceFile, "http") {
+			backupFile(resourceFile)
+			evaluateTemplates(resourceFile)
+		}
+	}
+
 	if resourcesFile != "" {
-		err = yaml.Unmarshal(fileContent, &kustomizeFileYaml)
-		if err != nil {
-			log.Fatalf("unmarshaling kustomize file %q failed error: %s", kustomizeFile, err)
-		}
-		res, ok := kustomizeFileYaml["resources"]
-		if !ok {
-			res = []any{}
-		}
-		kustomizeResources, err := unwrapResources(res)
-		if err != nil {
-			log.Fatalf("unwraping resources from %q failed error: %s", kustomizeFile, err)
-		}
 		relativePath, err := filepath.Rel(workDir, resourcesFile)
 		if err != nil {
 			relativePath = resourcesFile
