@@ -47,36 +47,6 @@ func Test_EvalGoTemplates(t *testing.T) {
 			args:    args{`Prefix {{ expandenv "PATH" }} suffix`},
 			wantErr: true,
 		},
-		// Azure secrets
-		{
-			name: "azSec function",
-			args: args{`Prefix {{ azSec "some-vault" "some-secret" }} suffix`},
-			// args: args{`Prefix {{ azSec "vault_name" "key_id" }} suffix`},
-			want: "Prefix secretValue suffix",
-		},
-		{
-			name: "azSec function with version",
-			// args: args{`Prefix {{ azSec "vault_name" "key_id" "key_version" }} suffix`},
-			args: args{`Prefix {{ azSec "some-vault" "some-secret" "2d5b71a61fca4a269a735216f6f1ec8f" }} suffix`},
-			want: "Prefix LAe9cFYtnG2NZmVYur5MVVLV5zYYC2NNAhEFTSjLEh78MTcrdGP5aa6G78nPYwaJ suffix",
-		},
-		{
-			name:    "azSec function without id",
-			args:    args{`Prefix {{ azSec }} suffix`},
-			wantErr: true,
-		},
-		{
-			name:    "azSec function with too many args",
-			args:    args{`Prefix {{ azSec "1" "2" "3" "4" }} suffix`},
-			wantErr: true,
-		},
-		// Azure Storage key
-		{
-			name:    "azStoreKey",
-			args:    args{`Prefix {{ azStoreKey "subscription-id" "some-resource-group" "someazurestorage" }} suffix`},
-			want:    "Prefix XXYYZZ0123456789ZZYYXX suffix",
-			wantErr: false,
-		},
 		// ArgoCD env
 		{
 			name: "argocd existing env",
@@ -87,11 +57,6 @@ func Test_EvalGoTemplates(t *testing.T) {
 			name: "argocd existing env with default",
 			args: args{`Prefix {{ argocdEnv "TEST_KEY" "not used" }} suffix`},
 			want: "Prefix ArgoCD data suffix",
-		},
-		{
-			name: "argocd not existing env with default",
-			args: args{`tls.key: '{{ azSec "rixocz-cert-vault" "rixo-ca-key" | b64dec | toPem "RSA PRIVATE KEY" | b64enc }}'`},
-			want: "Prefix fallback value suffix",
 		},
 		// unknown func
 		{

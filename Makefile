@@ -34,9 +34,9 @@ GOPROXY ?= https://proxy.golang.org
 CLI_PLATFORMS ?= darwin-amd64 darwin-arm64 freebsd-386 freebsd-amd64 freebsd-arm linux-386 linux-amd64 linux-arm linux-arm64 linux-mips linux-mips64 linux-mips64le linux-mipsle linux-ppc64 linux-ppc64le linux-s390x netbsd-386 netbsd-amd64 netbsd-arm openbsd-386 openbsd-amd64 windows-386 windows-amd64
 
 .PHONY: build
-build: $(OUT_DIR)/bin/$(GOOS)/$(GOARCH)/$(BIN)
+build: test $(OUT_DIR)/bin/$(GOOS)/$(GOARCH)/$(BIN)
 
-dist: $(OUT_DIR)/dist/$(GOOS)/$(GOARCH)/$(BIN)
+dist: test $(OUT_DIR)/dist/$(GOOS)/$(GOARCH)/$(BIN)
 
 local-build: clean build-dirs
 	@echo "building local"
@@ -91,13 +91,13 @@ clean:
 all:
 	@$(MAKE) clean all-dist
 
-build-%:
+build-%: test
 	@$(MAKE) --no-print-directory ARCH=$* build
 
 dist-%:
 	@$(MAKE) --no-print-directory ARCH=$* dist
 
-all-dist: $(addprefix dist-, $(CLI_PLATFORMS))
+all-dist: test $(addprefix dist-, $(CLI_PLATFORMS))
 
 test: build-dirs
 	./hack/test.sh
@@ -107,7 +107,7 @@ build-dirs:
 
 docker-build: docker-build-alpine
 
-docker-build-%: build-linux-amd64
+docker-build-%: build-linux-amd64 test
 	@docker build --progress plain --file $(DIST_DIR)/docker/Dockerfile-$* --build-arg KRMGEN_VERSION=$(VERSION) --tag $(DOCKER_REPO):$(VERSION) --tag $(DOCKER_REPO):latest .
 
 docker-release: docker-build
