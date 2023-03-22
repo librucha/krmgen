@@ -25,8 +25,8 @@ func TestIsConfigFile(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "valid file",
-			args: args{filePath: "../../test/resources/valid-krmgen.yaml"},
+			name: "full config",
+			args: args{filePath: "../../test/resources/full/full-krmgen-config.yaml"},
 			want: true,
 		},
 		{
@@ -55,21 +55,21 @@ func TestIsConfigFile(t *testing.T) {
 }
 
 func TestParseConfig(t *testing.T) {
-	_ = os.Setenv("MY_APP_NAME", "krmgen-app")
-	_ = os.Setenv("MY_APP_PROFILE", "test0")
+	_ = os.Setenv("ARGOCD_APP_REL_NAME", "krmgen-app")
+	_ = os.Setenv("ARGOCD_APP_REL_PROFILE", "test0")
 	type args struct {
 		filePath string
 	}
 	tests := []struct {
 		name    string
 		args    args
-		want    types.Config
+		want    *types.Config
 		wantErr bool
 	}{
 		{
 			name: "full config",
-			args: args{filePath: "../../test/resources/full-krmgen-config.yaml"},
-			want: types.Config{
+			args: args{filePath: "../../test/resources/full/full-krmgen-config.yaml"},
+			want: &types.Config{
 				ApiVersion: "krmgen.config.librucha.com/v1alpha1",
 				Kind:       "KrmGen",
 				Metadata: &types.Metadata{
@@ -94,18 +94,6 @@ func TestParseConfig(t *testing.T) {
 							ValuesFile: "",
 						},
 					},
-				},
-				Kustomize: &types.Kustomize{
-					ConfigInline: map[string]any{
-						"apiVersion": "kustomize.config.k8s.io/v1beta1",
-						"kind":       "Kustomization",
-						"namespace":  "default",
-						"resources": []any{
-							"kustomize/resources/cm.yaml",
-							"kustomize/resources/sec.yaml",
-						},
-					},
-					ConfigFile: "",
 				},
 			},
 		},

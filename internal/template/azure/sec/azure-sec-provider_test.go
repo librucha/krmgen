@@ -5,6 +5,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
 	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -111,6 +112,33 @@ func TestToPemBlock(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("ToPemBlock() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetSecret(t *testing.T) {
+	type args struct {
+		vaultName string
+		keyArgs   []string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    any
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetSecret(tt.args.vaultName, tt.args.keyArgs...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetSecret() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetSecret() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

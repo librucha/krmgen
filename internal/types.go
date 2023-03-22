@@ -9,8 +9,6 @@ type Config struct {
 	Kind       string    `yaml:"kind"`
 	Metadata   *Metadata `yaml:"metadata"`
 	Helm       *Helm     `yaml:"helm"`
-	// Kustomization files can be in source folders for process kustomization
-	Kustomize *Kustomize `yaml:"kustomize"`
 }
 
 func (config Config) HasHelm() bool {
@@ -35,11 +33,6 @@ type HelmChart struct {
 	Version      string         `yaml:"version"`
 	ValuesInline map[string]any `yaml:"valuesInline"`
 	ValuesFile   string         `yaml:"valuesFile"`
-}
-
-type Kustomize struct {
-	ConfigInline map[string]any `yaml:"configInline"`
-	ConfigFile   string         `yaml:"configFile"`
 }
 
 type SecretFuncMap struct {
