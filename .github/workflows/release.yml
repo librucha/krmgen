@@ -39,6 +39,11 @@ jobs:
 #            --output=krmgen.1
 #            man.md
 
+
+      - name: Build and push docker image
+        run: |
+          make docker-release
+
       - name: Build all platforms
         run: |
           sudo apt-get install rhash -y
