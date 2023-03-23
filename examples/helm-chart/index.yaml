@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  krmgen-example:
+  - apiVersion: v2
+    appVersion: 1.16.0
+    created: "2023-03-23T09:05:10.456444+01:00"
+    description: A Helm chart for Kubernetes
+    digest: 883a8bd80bf886263fb11dbc96289b950b42c3836dbb1a96880ca5f6a7959c51
+    name: krmgen-example
+    type: application
+    urls:
+    - https://raw.githubusercontent.com/librucha/krmgen/doc/examples/helm-chart/krmgen-example-0.1.0.tgz
+    version: 0.1.0
+generated: "2023-03-23T09:05:10.455924+01:00"
