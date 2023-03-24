@@ -15,7 +15,7 @@ RUN curl -fsSL -o /bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://d
 RUN chmod +x /bin/kubectl
 
 # install krmgen
-COPY ../../build/linux/amd64/krmgen /bin/krmgen
+COPY build/linux/amd64/krmgen /bin/krmgen
 RUN chmod +x /bin/krmgen
 
 # create krmgen user
