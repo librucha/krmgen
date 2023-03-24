@@ -113,3 +113,8 @@ docker-build-%: build-linux-amd64 test
 docker-release: docker-build
 	@ docker push $(DOCKER_REPO):$(VERSION)
 	@ docker push $(DOCKER_REPO):latest
+
+local-install: local-build
+ifeq ($(GOOS),darwin)
+	@cp $(OUT_DIR)/$(BIN) $(HOME)/.local/bin
+endif

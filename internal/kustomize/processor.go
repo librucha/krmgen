@@ -102,6 +102,21 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 		}
 	}
 
+	patches, ok := kustomizeFileYaml["patchesStrategicMerge"]
+	if !ok {
+		patches = []any{}
+	}
+	kustomizePatches, err := unwrapResources(patches)
+	if err != nil {
+		log.Fatalf("unwraping patchesStrategicMerge from %q failed error: %s", kustomizeFile, err)
+	}
+	for _, patchFile := range kustomizePatches {
+		if !strings.HasPrefix(patchFile, "http") {
+			backupFile(patchFile)
+			evaluateTemplates(patchFile)
+		}
+	}
+
 	if resourcesFile != "" {
 		relativePath, err := filepath.Rel(workDir, resourcesFile)
 		if err != nil {
