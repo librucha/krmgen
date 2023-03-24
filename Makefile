@@ -107,8 +107,8 @@ build-dirs:
 
 docker-build: docker-build-alpine
 
-docker-build-%: build-linux-amd64 test
-	@docker build --progress plain --file $(DIST_DIR)/docker/Dockerfile-$* --build-arg KRMGEN_VERSION=$(VERSION) --tag $(DOCKER_REPO):$(VERSION) --tag $(DOCKER_REPO):latest .
+docker-build-%: build-linux-amd64
+	@docker build --progress plain --file $(DIST_DIR)/docker/Dockerfile-$* --build-arg KRMGEN_VERSION=$(VERSION) --tag $(DOCKER_REPO):$(VERSION) --tag $(DOCKER_REPO):latest $(shell pwd)
 
 docker-release: docker-build
 	@ docker push $(DOCKER_REPO):$(VERSION)

@@ -87,4 +87,6 @@ if [[ "${MAKE_CHECKSUMS}" = true ]]; then
   cp ../hack/extract-checksum.sh .
 fi
 
-tar czvf "${OUTPUT}.tar.gz" "${OUTPUT}"
+echo "Packing ${OUTPUT##*/} to ${OUTPUT}.tar.gz"
+
+tar -C "${OUTPUT_DIR}" -Pczvf "${OUTPUT}.tar.gz" "${OUTPUT##*/}" 2>/dev/null
