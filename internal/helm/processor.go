@@ -49,13 +49,6 @@ func TemplateHelmCharts(helmConfig *types.Helm, workDir string) (string, error) 
 
 func templateHelm(generator generator, workDir string) (string, error) {
 	config := generator.getConfig()
-	tempDir, err := os.MkdirTemp(os.TempDir(), config.ReleaseName)
-	if err != nil {
-		return "", err
-	}
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tempDir)
 
 	args := []string{
 		"template",
@@ -73,7 +66,7 @@ func templateHelm(generator generator, workDir string) (string, error) {
 		args = generator.addCredentials(args)
 	}
 
-	valuesArgs, err := getValuesArgs(config, workDir, tempDir)
+	valuesArgs, err := getValuesArgs(config, workDir)
 	if err != nil {
 		return "", err
 	}
@@ -86,7 +79,7 @@ func templateHelm(generator generator, workDir string) (string, error) {
 	return stdOut, nil
 }
 
-func getValuesArgs(helmChartConfig *types.HelmChart, workDir string, tempDir string) ([]string, error) {
+func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
 	var args []string
 	valuesFile := helmChartConfig.ValuesFile
 	if valuesFile != "" {
@@ -98,7 +91,7 @@ func getValuesArgs(helmChartConfig *types.HelmChart, workDir string, tempDir str
 		if err != nil {
 			return nil, err
 		}
-		valuesInlineFile := filepath.Join(tempDir, "helm-values-"+helmChartConfig.ReleaseName+uuid.NewString())
+		valuesInlineFile := filepath.Join(workDir, "helm-values-"+helmChartConfig.ReleaseName+uuid.NewString())
 		err = os.WriteFile(valuesInlineFile, valuesInlineYaml, 0666)
 		if err != nil {
 			return nil, err

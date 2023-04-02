@@ -3,16 +3,13 @@ package kustomize
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/librucha/krmgen/internal/template"
 	"github.com/librucha/krmgen/internal/tool"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 var allowedFileNames = map[string]any{"kustomization.yaml": nil, "kustomization.yml": nil, "kustomization": nil}
@@ -70,11 +67,6 @@ func BuildKustomize(kustomizeFile string, workDir string, resources string) stri
 
 func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir string) {
 
-	// backup kustomize file
-	backupFile(kustomizeFile)
-	// evaluate templates
-	evaluateTemplates(kustomizeFile)
-
 	// add resources to kustomize file
 	var kustomizeFileYaml map[string]any
 	fileContent, err := os.ReadFile(kustomizeFile)
@@ -95,28 +87,6 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 		log.Fatalf("unwraping resources from %q failed error: %s", kustomizeFile, err)
 	}
 
-	for _, resourceFile := range kustomizeResources {
-		if !strings.HasPrefix(resourceFile, "http") {
-			backupFile(resourceFile)
-			evaluateTemplates(resourceFile)
-		}
-	}
-
-	patches, ok := kustomizeFileYaml["patchesStrategicMerge"]
-	if !ok {
-		patches = []any{}
-	}
-	kustomizePatches, err := unwrapResources(patches)
-	if err != nil {
-		log.Fatalf("unwraping patchesStrategicMerge from %q failed error: %s", kustomizeFile, err)
-	}
-	for _, patchFile := range kustomizePatches {
-		if !strings.HasPrefix(patchFile, "http") {
-			backupFile(patchFile)
-			evaluateTemplates(patchFile)
-		}
-	}
-
 	if resourcesFile != "" {
 		relativePath, err := filepath.Rel(workDir, resourcesFile)
 		if err != nil {
@@ -132,35 +102,6 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 		if err != nil {
 			log.Fatalf("writing updated kustomize file %q failed error: %s", kustomizeFile, err)
 		}
-	}
-}
-
-func backupFile(kustomizeFile string) {
-	dst, err := os.Create(fmt.Sprintf("%s_%s%s", kustomizeFile, time.Now().Format("20060102-150405"), filepath.Ext(kustomizeFile)))
-	defer dst.Close()
-	src, err := os.Open(kustomizeFile)
-	defer src.Close()
-	if err == nil {
-		_, err := io.Copy(dst, src)
-		if err != nil {
-			log.Printf("backup of kustomize file %s failed. skipping backup!", kustomizeFile)
-		}
-	}
-}
-
-func evaluateTemplates(kustomizeFile string) {
-	// evaluate templates
-	fileContent, err := os.ReadFile(kustomizeFile)
-	if err != nil {
-		log.Fatalf("reading kustomization file %q failed error: %s", kustomizeFile, err)
-	}
-	evaluated, err := template.EvalGoTemplates(string(fileContent))
-	if err != nil {
-		log.Fatalf("template evaluation of result failed error: %s", err)
-	}
-	err = os.WriteFile(kustomizeFile, []byte(evaluated), os.ModePerm)
-	if err != nil {
-		log.Fatalf("writing evaluated kustomize file %q failed error: %s", kustomizeFile, err)
 	}
 }
 

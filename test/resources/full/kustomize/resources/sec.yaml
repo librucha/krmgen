@@ -4,4 +4,4 @@ metadata:
   name: test-secret
 type: Opaque
 data:
-  password: <path:vault-storage#secret-key>
+  password: '{{ "sone_secret" | b64enc }}'

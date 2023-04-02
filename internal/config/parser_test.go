@@ -81,14 +81,14 @@ func TestParseConfig(t *testing.T) {
 						{
 							Name:        "helm-app",
 							RepoUrl:     "oci://helm.registry.io/helm/",
-							Username:    "krmgenUser",
-							Password:    "",
-							ReleaseName: "krmgen-app",
+							Username:    `{{ argocdEnv "MY_USERNAME" "krmgenUser" }}`,
+							Password:    `{{ argocdEnv "MY_PASSWORD" "" }}`,
+							ReleaseName: `{{ argocdEnv "REL_NAME" }}`,
 							Version:     "5.4.3",
 							ValuesInline: map[string]any{
 								"appVersion": "1.0.0",
 								"name":       "test",
-								"profile":    "test0",
+								"profile":    `{{ argocdEnv "REL_PROFILE" }}`,
 								"logging":    map[string]any{"enabled": true},
 							},
 							ValuesFile: "",

@@ -2,7 +2,6 @@ package config
 
 import (
 	types "github.com/librucha/krmgen/internal"
-	"github.com/librucha/krmgen/internal/template"
 	"gopkg.in/yaml.v3"
 	"log"
 	"os"
@@ -38,11 +37,7 @@ func ParseConfig(filePath string) (*types.Config, error) {
 
 	var config types.Config
 
-	evalContent, err := template.EvalGoTemplates(string(content))
-	if err != nil {
-		return nil, err
-	}
-	if err := yaml.Unmarshal([]byte(evalContent), &config); err != nil {
+	if err := yaml.Unmarshal(content, &config); err != nil {
 		return nil, err
 	}
 

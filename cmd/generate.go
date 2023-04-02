@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/librucha/krmgen/internal/config"
+	"github.com/librucha/krmgen/internal/template"
 	"github.com/spf13/cobra"
 	"log"
 	"os"
@@ -21,37 +22,84 @@ func NewGenerateCommand() *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			workDir, err := filepath.Abs(args[0])
+			srcDir, err := filepath.Abs(args[0])
 			if err != nil {
 				log.Fatal(err)
 			}
-			if err := processWorkDir(workDir); err != nil {
-				log.Fatal(err)
-			}
+			workDir := copySrcDir(srcDir)
+			processWorkDir(workDir)
 		},
 	}
 	return command
 }
 
-func processWorkDir(workDir string) error {
-	entries, err := os.ReadDir(workDir)
+func copySrcDir(srcDir string) string {
+
+	workDir, err := os.MkdirTemp(os.TempDir(), "krmgen")
 	if err != nil {
-		return err
+		log.Fatalf("creating working dir in %s failed error: %s", os.TempDir(), err)
+	}
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(workDir)
+
+	copyDir(srcDir, workDir)
+
+	return workDir
+}
+
+func copyDir(srcDir string, dstDir string) {
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		log.Fatalf("reading source directory %s failed error: %s", srcDir, err)
 	}
 
 	for _, entry := range entries {
-		filePath := workDir + "/" + entry.Name()
+		srcPath := filepath.Join(srcDir, entry.Name())
+		dstPath := filepath.Join(dstDir, entry.Name())
+		if entry.IsDir() {
+			err = os.MkdirAll(dstPath, 0750)
+			if err != nil {
+				log.Fatalf("crating directory %s failed error: %s", dstPath, err)
+			}
+			copyDir(filepath.Join(srcDir, entry.Name()), dstPath)
+		} else {
+			fileContent, err := os.ReadFile(srcPath)
+			if err != nil {
+				log.Fatalf("reading file %s failed error: %s", srcPath, err)
+			}
+			// evaluate templates
+			evaluated, err := template.EvalGoTemplates(string(fileContent))
+			if err != nil {
+				log.Fatalf("template evaluation of file %s failed error: %s", srcPath, err)
+			}
+			err = os.WriteFile(dstPath, []byte(evaluated), os.ModePerm)
+			if err != nil {
+				log.Fatalf("writing evaluated file %s failed error: %s", srcPath, err)
+			}
+		}
+
+	}
+}
+
+func processWorkDir(workDir string) {
+	entries, err := os.ReadDir(workDir)
+	if err != nil {
+		log.Fatalf("reading work directory %s failed error: %s", workDir, err)
+	}
+
+	for _, entry := range entries {
+		filePath := filepath.Join(workDir, entry.Name())
 		if !entry.IsDir() && config.IsConfigFile(filePath) {
 			configObject, err := config.ParseConfig(filePath)
 			if err != nil {
-				return err
+				log.Fatalf("parsing config file %s failed error: %s", filePath, err)
 			}
 			resources, err := config.ProcessConfig(configObject, workDir)
 			if err != nil {
-				return err
+				log.Fatalf("processing config file %s failed error: %s", filePath, err)
 			}
 			fmt.Println(resources)
 		}
 	}
-	return nil
 }
