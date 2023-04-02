@@ -28,6 +28,9 @@ func NewGenerateCommand() *cobra.Command {
 			}
 			workDir := copySrcDir(srcDir)
 			processWorkDir(workDir)
+			defer func(path string) {
+				_ = os.RemoveAll(path)
+			}(workDir)
 		},
 	}
 	return command
@@ -39,9 +42,6 @@ func copySrcDir(srcDir string) string {
 	if err != nil {
 		log.Fatalf("creating working dir in %s failed error: %s", os.TempDir(), err)
 	}
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(workDir)
 
 	copyDir(srcDir, workDir)
 
