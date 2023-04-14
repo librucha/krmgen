@@ -36,6 +36,21 @@ func Test_EvalGoTemplates(t *testing.T) {
 			args: args{" \t"},
 			want: " \t",
 		},
+		{
+			name: "param as func",
+			args: args{`Prefix {{ with $name:= "TEST_KEY"}}{{ argocdEnv $name }}{{end}} suffix`},
+			want: "Prefix ArgoCD data suffix",
+		},
+		{
+			name: "part of param as func",
+			args: args{`Prefix {{ with $name:= "_KEY"}}{{ printf "TEST%s" $name | argocdEnv }}{{end}} suffix`},
+			want: "Prefix ArgoCD data suffix",
+		},
+		{
+			name: "part of param as func without variable",
+			args: args{`Prefix {{ upper "test_key" | printf "%s"  | argocdEnv }} suffix`},
+			want: "Prefix ArgoCD data suffix",
+		},
 		// Rainy scenarios
 		{
 			name:    "sprig env function",

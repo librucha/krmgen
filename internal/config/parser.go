@@ -19,7 +19,6 @@ func IsConfigFile(filePath string) bool {
 	var contentObject map[string]any
 	err = yaml.Unmarshal(content, &contentObject)
 	if err != nil {
-		log.Println(err)
 		return false
 	}
 	kind := contentObject["kind"]

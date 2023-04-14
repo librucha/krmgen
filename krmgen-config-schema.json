@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/librucha/krmgen/raw/main/krmgen-config-schema.json",
+  "$id": "https://raw.githubusercontent.com/librucha/krmgen/master/krmgen-config-schema.json",
   "$schema": "http://json-schema.org/draft-04/schema#",
   "title": "Krm Generator Config",
   "type": "object",
