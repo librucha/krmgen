@@ -25,14 +25,15 @@ type Helm struct {
 }
 
 type HelmChart struct {
-	Name         string         `yaml:"name"`
-	RepoUrl      string         `yaml:"repo"`
-	Username     string         `yaml:"repoUser"`
-	Password     string         `yaml:"repoPassword"`
-	ReleaseName  string         `yaml:"releaseName"`
-	Version      string         `yaml:"version"`
-	ValuesInline map[string]any `yaml:"valuesInline"`
-	ValuesFile   string         `yaml:"valuesFile"`
+	Name              string         `yaml:"name"`
+	RepoUrl           string         `yaml:"repo"`
+	IgnoreCredentials bool           `yaml:"ignoreCredentials"`
+	Username          string         `yaml:"repoUser"`
+	Password          string         `yaml:"repoPassword"`
+	ReleaseName       string         `yaml:"releaseName"`
+	Version           string         `yaml:"version"`
+	ValuesInline      map[string]any `yaml:"valuesInline"`
+	ValuesFile        string         `yaml:"valuesFile"`
 }
 
 type SecretFuncMap struct {

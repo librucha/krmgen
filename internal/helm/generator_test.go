@@ -141,6 +141,40 @@ func Test_credentialsProvided(t *testing.T) {
 				}},
 			want: false,
 		},
+		{
+			name: "ignored credentials inline",
+			args: args{
+				config: &types.HelmChart{
+					Username:          "username",
+					Password:          "password",
+					IgnoreCredentials: true,
+				}},
+			want: false,
+		},
+		{
+			name: "ignored credentials in ENV",
+			args: args{
+				config: &types.HelmChart{
+					Username:          "",
+					Password:          "",
+					IgnoreCredentials: true,
+				}},
+			env: map[string]string{
+				cons.EnvHelmUsername: "username",
+				cons.EnvHelmPassword: "password",
+			},
+			want: false,
+		},
+		{
+			name: "ignored empty credentials",
+			args: args{
+				config: &types.HelmChart{
+					Username:          "",
+					Password:          "",
+					IgnoreCredentials: true,
+				}},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

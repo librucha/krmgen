@@ -51,6 +51,9 @@ func credentialsProvided(config *types.HelmChart) bool {
 
 func credentialsArgs(config *types.HelmChart) []string {
 	var args []string
+	if config.IgnoreCredentials {
+		return args
+	}
 	username := config.Username
 	if username == "" {
 		username = os.Getenv(cons.EnvHelmUsername)
