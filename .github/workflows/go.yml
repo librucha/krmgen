@@ -5,6 +5,7 @@ on:
       - 'develop'
       - 'release/**'
       - 'main'
+      - 'master'
     tags-ignore:
       - 'v*'
       - 'draft-*'
