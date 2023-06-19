@@ -18,15 +18,15 @@ var cachedCerts = make(map[azkeys.ID]*azkeys.KeyBundle, 5)
 func ResolveKey(vaultName string, keyArgs ...string) (any, error) {
 	switch len(keyArgs) {
 	case 1:
-		return getCertFromAzure(vaultName, keyArgs[0], "")
+		return getKeyFromAzure(vaultName, keyArgs[0], "")
 	case 2:
-		return getCertFromAzure(vaultName, keyArgs[0], keyArgs[1])
+		return getKeyFromAzure(vaultName, keyArgs[0], keyArgs[1])
 	default:
 		return nil, fmt.Errorf("wrong arguments count for function %q expected 1 or 2 aruments but got %d", KeyFunc, len(keyArgs))
 	}
 }
 
-func getCertFromAzure(vaultName string, keyName string, keyVer string) (string, error) {
+func getKeyFromAzure(vaultName string, keyName string, keyVer string) (string, error) {
 	secretId := newId(vaultName, keyName, keyVer)
 	cached := getFromCache(secretId)
 	if cached != nil {

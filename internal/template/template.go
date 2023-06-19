@@ -6,6 +6,7 @@ import (
 	"github.com/librucha/krmgen/internal/template/argocd"
 	azcert "github.com/librucha/krmgen/internal/template/azure/cert"
 	azkey "github.com/librucha/krmgen/internal/template/azure/key"
+	azpfx "github.com/librucha/krmgen/internal/template/azure/pfx"
 	azsec "github.com/librucha/krmgen/internal/template/azure/sec"
 	azstorage "github.com/librucha/krmgen/internal/template/azure/storage"
 	"github.com/librucha/krmgen/internal/template/files"
@@ -28,6 +29,8 @@ func initFuncs(t *template.Template) {
 	// Add Azure key vault secrets
 	funcs[azsec.SecFunc] = azsec.GetSecret
 	funcs[azsec.ToPemFunc] = azsec.ToPemBlock
+	funcs[azpfx.PfxKeyFunc] = azpfx.GetPfxKey
+	funcs[azpfx.PfxCrtFunc] = azpfx.GetPfxCert
 	// Add Azure key vault certificates
 	funcs[azcert.CertFunc] = azcert.ResolveCert
 	// Add Azure key vault keys
