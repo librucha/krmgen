@@ -5,7 +5,7 @@ import (
 	"context"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"io"
 	"net/http"
 	"reflect"
@@ -94,6 +94,7 @@ func TestGetSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			azureClients[tt.args.vaultName] = client
+			cachedSecrets = make(map[azsecrets.ID]*azsecrets.Secret, 10)
 
 			if tt.resStatus == 0 {
 				tt.resStatus = http.StatusOK

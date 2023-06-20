@@ -5,7 +5,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"strings"
 )
 
@@ -14,7 +14,7 @@ const ToPemFunc = "toPem"
 
 var azureClients = make(map[string]*azsecrets.Client, 10)
 
-var cachedSecrets = make(map[azsecrets.ID]*azsecrets.SecretBundle, 50)
+var cachedSecrets = make(map[azsecrets.ID]*azsecrets.Secret, 50)
 
 func GetSecret(vaultName string, keyArgs ...string) (any, error) {
 	switch len(keyArgs) {
@@ -49,7 +49,7 @@ func getSecretFromAzure(vaultName string, keyId string, keyVer string) (string, 
 	if err != nil {
 		return "", err
 	}
-	saveToCache(*secret.ID, &secret.SecretBundle)
+	saveToCache(*secret.ID, &secret.Secret)
 	return *secret.Value, nil
 }
 
@@ -78,7 +78,7 @@ func getVaultUrl(vaultName string) string {
 	return fmt.Sprintf("https://%v.vault.azure.net", vaultName)
 }
 
-func getFromCache(id azsecrets.ID) *azsecrets.SecretBundle {
+func getFromCache(id azsecrets.ID) *azsecrets.Secret {
 	cached := cachedSecrets[id]
 	if cached == nil {
 		return nil
@@ -86,6 +86,6 @@ func getFromCache(id azsecrets.ID) *azsecrets.SecretBundle {
 	return cached
 }
 
-func saveToCache(id azsecrets.ID, secret *azsecrets.SecretBundle) {
+func saveToCache(id azsecrets.ID, secret *azsecrets.Secret) {
 	cachedSecrets[id] = secret
 }
