@@ -14,6 +14,7 @@ helm:
       repoPassword: '{{ argocdEnv "MY_PASSWORD" "" }}'
       releaseName: '{{ argocdEnv "REL_NAME" }}'
       version: 5.4.3
+      namespace: default
       valuesInline:
         appVersion: 1.0.0
         name: test

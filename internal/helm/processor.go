@@ -58,6 +58,9 @@ func templateHelm(generator generator, workDir string) (string, error) {
 	if config.Version != "" {
 		args = append(args, "--version", config.Version)
 	}
+	if config.Namespace != "" {
+		args = append(args, "--namespace", config.Namespace)
+	}
 
 	args = generator.addRepoArgs(args)
 

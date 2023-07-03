@@ -85,6 +85,7 @@ func TestParseConfig(t *testing.T) {
 							Password:    `{{ argocdEnv "MY_PASSWORD" "" }}`,
 							ReleaseName: `{{ argocdEnv "REL_NAME" }}`,
 							Version:     "5.4.3",
+							Namespace:   "default",
 							ValuesInline: map[string]any{
 								"appVersion": "1.0.0",
 								"name":       "test",

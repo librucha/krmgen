@@ -32,6 +32,7 @@ type HelmChart struct {
 	Password          string         `yaml:"repoPassword"`
 	ReleaseName       string         `yaml:"releaseName"`
 	Version           string         `yaml:"version"`
+	Namespace         string         `yaml:"namespace"`
 	ValuesInline      map[string]any `yaml:"valuesInline"`
 	ValuesFile        string         `yaml:"valuesFile"`
 }
