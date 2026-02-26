@@ -109,7 +109,7 @@ tasks:
   docker-build:
     desc: "Build Docker image"
     cmds:
-      - goreleaser release --clean -auto-snapshot --skip=publish
+      - goreleaser release --clean --auto-snapshot --skip=publish
 
   release:
     desc: "Create release and publish Docker images"
