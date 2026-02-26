@@ -71,6 +71,6 @@ release:
   disable: true
 
 dockerhub:
-  - disable: 'false'
+  - description: "CLI tool for generate Kubernetes Resource Model from helm and kustomization together"
 
 
