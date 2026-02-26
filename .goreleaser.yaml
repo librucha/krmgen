@@ -49,7 +49,7 @@ checksum:
   algorithm: sha256
 
 snapshot:
-  version_template: "{{ incpatch .Version }}"
+  version_template: "{{ incpatch .Version }}-devel"
 
 dockers_v2:
   - id: krmgen
@@ -58,6 +58,9 @@ dockers_v2:
     platforms:
       - linux/arm64
       - linux/amd64
+    tags:
+      - "{{.Version}}"
+      - latest
     labels:
       "org.opencontainers.image.created": "{{.Date}}"
       "org.opencontainers.image.title": "{{.ProjectName}}"
@@ -69,3 +72,11 @@ dockers_v2:
 
 release:
   disable: true
+
+dockerhub:
+  - username: librucha
+    full_description:
+      from_file:
+        path: ./README.md
+
+
