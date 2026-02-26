@@ -8,6 +8,10 @@ vars:
     sh: find . -type f -name '*.go' -not -path "./vendor/*"
   HOME_DIR:
     sh: echo $HOME
+  GIT_COMMIT:
+    sh: git rev-parse --short=8 HEAD
+  GIT_VERSION:
+    sh: git describe --tags --always --dirty
 
 tasks:
   default:
@@ -15,6 +19,12 @@ tasks:
     cmds:
       - task --list
     silent: true
+
+  install-tools:
+    desc: "Install development tools"
+    cmds:
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - go install github.com/air-verse/air@latest
 
   build:
     desc: "Compile the project"
@@ -26,7 +36,7 @@ tasks:
       - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
     cmds:
       - mkdir -p {{.BUILD_DIR}}
-      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags "-s -w -X main.version=DEV" {{.MAIN_PATH}}
+      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags "-s -w -X main.version={{.GIT_VERSION}}" {{.MAIN_PATH}}
 
   build-linux:
     desc: "Compile the project for Linux (amd64)"
@@ -101,14 +111,8 @@ tasks:
     cmds:
       - goreleaser release --clean --snapshot --skip=publish
 
-  install-tools:
-    desc: "Install development tools"
-    cmds:
-      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-      - go install github.com/air-verse/air@latest
-
   release:
-    desc: "Create release and Docker image"
+    desc: "Create release and publish Docker images"
     cmds:
       - goreleaser release --clean --auto-snapshot
 
@@ -127,4 +131,4 @@ tasks:
     env:
       GOBIN: "{{.HOME_DIR}}/go/bin"
     cmds:
-      - go install -ldflags "-s -w -X main.version=DEV"
+      - go install -ldflags "-s -w -X main.version={{.GIT_VERSION}}"

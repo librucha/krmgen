@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/azure-cli
+FROM alpine:latest
 
 ARG KRMGEN_VERSION
 ARG TARGETPLATFORM
@@ -9,11 +9,15 @@ LABEL version=${KRMGEN_VERSION}
 # Switch to root for the ability to perform install
 USER root
 
-RUN tdnf install helm kubectl --assumeyes
+RUN apk add helm kubectl --no-cache
 
 # install krmgen
 COPY $TARGETPLATFORM/krmgen /bin/krmgen
 RUN chmod +x /bin/krmgen
 
+# create krmgen user
+RUN delgroup $(cat /etc/group | grep 999 | cut -d: -f1)
+RUN adduser -u 999 -D krmgen
+
 # Switch back to non-root user
-USER nonroot
+USER 999
