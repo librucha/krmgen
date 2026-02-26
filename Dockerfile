@@ -1,10 +1,8 @@
 FROM alpine:latest
 
-ARG KRMGEN_VERSION
 ARG TARGETPLATFORM
 
 LABEL maintainer="librucha@gmail.com"
-LABEL version=${KRMGEN_VERSION}
 
 # Switch to root for the ability to perform install
 USER root
