@@ -1,19 +1,20 @@
 package cmd
 
 import (
-	"github.com/librucha/krmgen/version"
+	appVer "github.com/librucha/krmgen/version"
 	"github.com/spf13/cobra"
 )
 
-func NewRootCommand() *cobra.Command {
+func NewRootCommand(version string) *cobra.Command {
 	var command = &cobra.Command{
 		Use:   "krmgen",
 		Short: "Kubernetes Resource Model (KRM) generator",
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.HelpFunc()(cmd, args)
 		},
-		Version: version.AppVersion,
+		Version: version,
 	}
+	appVer.AppVersion = version
 	command.AddCommand(NewGenerateCommand())
 	return command
 }

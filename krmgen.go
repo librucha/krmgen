@@ -2,17 +2,17 @@ package main
 
 import (
 	_ "embed"
-	cmd "github.com/librucha/krmgen/cmd"
-	"github.com/librucha/krmgen/version"
 	"log"
+
+	"github.com/librucha/krmgen/cmd"
 )
 
-//go:embed version.txt
-var versionFile string
+var version string
+var commit string
+var date string
 
 func main() {
-	version.AppVersion = versionFile
-	if err := cmd.NewRootCommand().Execute(); err != nil {
+	if err := cmd.NewRootCommand(version).Execute(); err != nil {
 		log.Fatal(err)
 	}
 }

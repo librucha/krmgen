@@ -56,6 +56,10 @@
                 "type": "string",
                 "description": "Helm repository password. Use of env variable is strongly recommended."
               },
+              "ignoreCredentials": {
+                "type": "boolean",
+                "description": "Usable for public oci repos like quay.io"
+              },
               "releaseName": {
                 "type": "string",
                 "description": "Helm release name"

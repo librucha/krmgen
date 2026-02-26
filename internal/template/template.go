@@ -5,6 +5,7 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"github.com/librucha/krmgen/internal/template/argocd"
 	azcert "github.com/librucha/krmgen/internal/template/azure/cert"
+	azid "github.com/librucha/krmgen/internal/template/azure/identity"
 	azkey "github.com/librucha/krmgen/internal/template/azure/key"
 	azsec "github.com/librucha/krmgen/internal/template/azure/sec"
 	azstorage "github.com/librucha/krmgen/internal/template/azure/storage"
@@ -36,6 +37,8 @@ func initFuncs(t *template.Template) {
 	funcs[azkey.KeyFunc] = azkey.ResolveKey
 	// Add Azure storage key
 	funcs[azstorage.StoreKeyFunc] = azstorage.GetStoreKey
+	// Add Azure Identity
+	funcs[azid.ClientIdFunc] = azid.GetClientId
 
 	// Add ArgoCD env function
 	funcs[argocd.EnvFunc] = argocd.ResolveArgocdEnv

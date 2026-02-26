@@ -1,0 +1,130 @@
+version: '3'
+
+vars:
+  BINARY_NAME: krmgen
+  MAIN_PATH: .
+  BUILD_DIR: build
+  GO_FILES:
+    sh: find . -type f -name '*.go' -not -path "./vendor/*"
+  HOME_DIR:
+    sh: echo $HOME
+
+tasks:
+  default:
+    desc: "Display available tasks"
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: "Compile the project"
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags "-s -w -X main.version=DEV" {{.MAIN_PATH}}
+
+  build-linux:
+    desc: "Compile the project for Linux (amd64)"
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - GOOS=linux GOARCH=amd64 go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-linux-amd64 {{.MAIN_PATH}}
+
+  run:
+    desc: "Run the application"
+    deps: [build]
+    cmds:
+      - ./{{.BUILD_DIR}}/{{.BINARY_NAME}}
+
+  test:
+    desc: "Run tests"
+    cmds:
+      - go test -v -race -coverprofile=coverage.out ./...
+
+  test-coverage:
+    desc: "Run tests with coverage report"
+    cmds:
+      - go test -v -race -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated to coverage.html"
+
+  lint:
+    desc: "Run golangci-lint"
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: "Format Go code"
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: "Run go vet"
+    cmds:
+      - go vet ./...
+
+  tidy:
+    desc: "Clean up go.mod and go.sum"
+    cmds:
+      - go mod tidy
+
+  deps:
+    desc: "Download dependencies"
+    cmds:
+      - go mod download
+
+  clean:
+    desc: "Clean up build artifacts"
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - rm -f coverage.out coverage.html
+
+  check:
+    desc: "Run all checks (fmt, vet, lint, test)"
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: test
+
+  dev:
+    desc: "Development mode with auto-reload (requires air)"
+    cmds:
+      - air
+
+  docker-build:
+    desc: "Build Docker image"
+    cmds:
+      - goreleaser release --clean --snapshot --skip=publish
+
+  install-tools:
+    desc: "Install development tools"
+    cmds:
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - go install github.com/air-verse/air@latest
+
+  release:
+    desc: "Create release and Docker image"
+    cmds:
+      - goreleaser release --clean --auto-snapshot
+
+  upgrade:
+    desc: "Upgrade Go and all dependencies"
+    cmds:
+      - go get -v -u all
+      - go mod tidy
+
+  install:
+    desc: "Install compiled the project"
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    env:
+      GOBIN: "{{.HOME_DIR}}/go/bin"
+    cmds:
+      - go install -ldflags "-s -w -X main.version=DEV"

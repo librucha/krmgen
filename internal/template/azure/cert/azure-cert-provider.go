@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/pem"
 	"fmt"
+	"strings"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
-	"strings"
 )
 
 const CertFunc = "azCert"
 
 var azureClients = make(map[string]*azcertificates.Client, 10)
 
-var cachedCerts = make(map[azcertificates.ID]*azcertificates.CertificateBundle, 5)
+var cachedCerts = make(map[azcertificates.ID]*azcertificates.Certificate, 5)
 
 func ResolveCert(vaultName string, certArgs ...string) (any, error) {
 	switch len(certArgs) {
@@ -40,7 +41,7 @@ func getCertFromAzure(vaultName string, certName string, certVer string) (string
 	if err != nil {
 		return "", err
 	}
-	saveToCache(*certificate.ID, &certificate.CertificateBundle)
+	saveToCache(*certificate.ID, &certificate.Certificate)
 	return wrapCert(certificate.CER), nil
 }
 
@@ -69,7 +70,7 @@ func getVaultUrl(vaultName string) string {
 	return fmt.Sprintf("https://%v.vault.azure.net", vaultName)
 }
 
-func getFromCache(id azcertificates.ID) *azcertificates.CertificateBundle {
+func getFromCache(id azcertificates.ID) *azcertificates.Certificate {
 	cached := cachedCerts[id]
 	if cached == nil {
 		return nil
@@ -77,7 +78,7 @@ func getFromCache(id azcertificates.ID) *azcertificates.CertificateBundle {
 	return cached
 }
 
-func saveToCache(id azcertificates.ID, secret *azcertificates.CertificateBundle) {
+func saveToCache(id azcertificates.ID, secret *azcertificates.Certificate) {
 	cachedCerts[id] = secret
 }
 
