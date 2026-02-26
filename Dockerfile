@@ -7,7 +7,7 @@ LABEL maintainer="librucha@gmail.com"
 # Switch to root for the ability to perform install
 USER root
 
-RUN apk add helm kubectl --no-cache
+RUN apk add git helm kubectl --no-cache
 
 # install krmgen
 COPY $TARGETPLATFORM/krmgen /bin/krmgen
