@@ -59,7 +59,7 @@ dockers_v2:
       - linux/arm64
       - linux/amd64
     tags:
-      - {{.Version}}
+      - "{{.Version}}"
       - latest
     labels:
       "org.opencontainers.image.created": "{{.Date}}"
