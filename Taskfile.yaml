@@ -113,6 +113,11 @@ tasks:
 
   release:
     desc: "Create release and publish Docker images"
+    preconditions:
+      - sh: test -n "$DOCKER_USERNAME"
+        msg: "DOCKER_USERNAME is not set"
+      - sh: test -n "$DOCKER_PASSWORD"
+        msg: "DOCKER_PASSWORD is not set"
     cmds:
       - goreleaser release --clean --auto-snapshot
 

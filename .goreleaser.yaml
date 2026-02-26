@@ -58,9 +58,6 @@ dockers_v2:
     platforms:
       - linux/arm64
       - linux/amd64
-    tags:
-      - "{{.Version}}"
-      - latest
     labels:
       "org.opencontainers.image.created": "{{.Date}}"
       "org.opencontainers.image.title": "{{.ProjectName}}"
@@ -74,8 +71,7 @@ release:
   disable: true
 
 dockerhub:
-  - username: librucha
-    full_description:
+  - full_description:
       from_file:
         path: ./README.md
 
