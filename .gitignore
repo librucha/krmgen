@@ -213,6 +213,8 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,jetbrains,go
 
+.idea
+.task
 build
 dist/install/krmgen
 dist
