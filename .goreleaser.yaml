@@ -71,8 +71,6 @@ release:
   disable: true
 
 dockerhub:
-  - full_description:
-      from_file:
-        path: ./README.md
+  - disable: 'false'
 
 
