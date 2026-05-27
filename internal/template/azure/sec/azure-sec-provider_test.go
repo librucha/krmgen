@@ -22,6 +22,31 @@ func (m mockSender) Do(r *http.Request) (*http.Response, error) {
 	return m.doFunc(r)
 }
 
+func newTestClient(sender *mockSender) *azsecrets.Client {
+	options := azsecrets.ClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			Transport: sender,
+		},
+		DisableChallengeResourceVerification: true,
+	}
+	client, _ := azsecrets.NewClient("https://fake.vault.io", &FakeCredential{}, &options)
+	return client
+}
+
+func testHeaders() http.Header {
+	h := http.Header{}
+	h.Set("WWW-Authenticate", `Bearer authorization="https://login.windows.net/d5069782-a6df-436e-bac4-67b0c78175c8", resource="not_empty"`)
+	return h
+}
+
+func mockResponse(status int, body string, headers http.Header) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Header:     headers,
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
 func TestGetSecret(t *testing.T) {
 	type args struct {
 		vaultName string
@@ -30,7 +55,8 @@ func TestGetSecret(t *testing.T) {
 	tests := []struct {
 		name      string
 		args      args
-		resBody   string
+		listBody  string // response body for /versions request (used only for no-version calls)
+		resBody   string // response body for GetSecret request
 		resStatus int
 		want      string
 		wantErr   bool
@@ -41,9 +67,9 @@ func TestGetSecret(t *testing.T) {
 				vaultName: "vault_name",
 				keyArgs:   []string{"key_id"},
 			},
-			resBody: `{"id":"https://vault_name.vault.azure.net/key_id/","value":"secretValue"}`,
-			want:    "secretValue",
-			wantErr: false,
+			listBody: `{"value":[{"id":"https://fake.vault.io/secrets/key_id/ver1","attributes":{"enabled":true,"created":1000000000}}]}`,
+			resBody:  `{"id":"https://fake.vault.io/secrets/key_id/ver1","value":"secretValue"}`,
+			want:     "secretValue",
 		},
 		{
 			name: "secret with version",
@@ -53,7 +79,6 @@ func TestGetSecret(t *testing.T) {
 			},
 			resBody: `{"id":"https://vault_name.vault.azure.net/key_id/key_version/","value":"secretValueV1"}`,
 			want:    "secretValueV1",
-			wantErr: false,
 		},
 		{
 			name: "unknown secret",
@@ -79,36 +104,25 @@ func TestGetSecret(t *testing.T) {
 		},
 	}
 
-	// Setup client and mock Sender
 	sender := &mockSender{}
-
-	options := azsecrets.ClientOptions{
-		ClientOptions: azcore.ClientOptions{
-			Transport: sender,
-		},
-		DisableChallengeResourceVerification: true,
-	}
-	client, _ := azsecrets.NewClient("https://fake.vault.io", &FakeCredential{}, &options)
+	client := newTestClient(sender)
+	headers := testHeaders()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			azureClients[tt.args.vaultName] = client
 			cachedSecrets = make(map[azsecrets.ID]*azsecrets.Secret, 10)
 
-			if tt.resStatus == 0 {
-				tt.resStatus = http.StatusOK
+			status := tt.resStatus
+			if status == 0 {
+				status = http.StatusOK
 			}
 
-			headers := http.Header{}
-			headers.Set("WWW-Authenticate", `Bearer authorization="https://login.windows.net/d5069782-a6df-436e-bac4-67b0c78175c8", resource="not_empty"`)
-
 			sender.doFunc = func(r *http.Request) (*http.Response, error) {
-				return &http.Response{
-					StatusCode: tt.resStatus,
-					Header:     headers,
-					Body:       io.NopCloser(strings.NewReader(tt.resBody)),
-				}, nil
+				if strings.Contains(r.URL.Path, "/versions") {
+					return mockResponse(http.StatusOK, tt.listBody, headers), nil
+				}
+				return mockResponse(status, tt.resBody, headers), nil
 			}
 
 			got, err := GetSecret(tt.args.vaultName, tt.args.keyArgs...)
@@ -120,6 +134,120 @@ func TestGetSecret(t *testing.T) {
 				t.Errorf("GetSecret() got = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGetLatestActiveSecret(t *testing.T) {
+	const vaultName = "vault_name"
+	const secretName = "sec"
+
+	tests := []struct {
+		name     string
+		listBody string
+		getBody  string
+		want     string
+		wantErr  bool
+	}{
+		{
+			name: "returns most recently created active version",
+			listBody: `{"value":[
+				{"id":"https://fake.vault.io/secrets/sec/ver1","attributes":{"enabled":true,"created":1748200000}},
+				{"id":"https://fake.vault.io/secrets/sec/ver2","attributes":{"enabled":true,"created":1748300000}}
+			]}`,
+			getBody: `{"id":"https://fake.vault.io/secrets/sec/ver2","value":"secret_ver2"}`,
+			want:    "secret_ver2",
+		},
+		{
+			name: "skips version with future NotBefore",
+			listBody: `{"value":[
+				{"id":"https://fake.vault.io/secrets/sec/ver1","attributes":{"enabled":true,"created":1748200000}},
+				{"id":"https://fake.vault.io/secrets/sec/ver2","attributes":{"enabled":true,"created":1748300000,"nbf":9999999999}}
+			]}`,
+			getBody: `{"id":"https://fake.vault.io/secrets/sec/ver1","value":"secret_ver1"}`,
+			want:    "secret_ver1",
+		},
+		{
+			name: "returns error when all versions have future NotBefore",
+			listBody: `{"value":[
+				{"id":"https://fake.vault.io/secrets/sec/ver1","attributes":{"enabled":true,"nbf":9999999999}},
+				{"id":"https://fake.vault.io/secrets/sec/ver2","attributes":{"enabled":true,"nbf":9999999999}}
+			]}`,
+			getBody: ``,
+			wantErr: true,
+		},
+		{
+			name: "skips disabled version",
+			listBody: `{"value":[
+				{"id":"https://fake.vault.io/secrets/sec/ver1","attributes":{"enabled":false,"created":1748200000}},
+				{"id":"https://fake.vault.io/secrets/sec/ver2","attributes":{"enabled":true,"created":1748300000}}
+			]}`,
+			getBody: `{"id":"https://fake.vault.io/secrets/sec/ver2","value":"secret_ver2"}`,
+			want:    "secret_ver2",
+		},
+	}
+
+	sender := &mockSender{}
+	client := newTestClient(sender)
+	headers := testHeaders()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			azureClients[vaultName] = client
+			cachedSecrets = make(map[azsecrets.ID]*azsecrets.Secret, 10)
+
+			sender.doFunc = func(r *http.Request) (*http.Response, error) {
+				if strings.Contains(r.URL.Path, "/versions") {
+					return mockResponse(http.StatusOK, tt.listBody, headers), nil
+				}
+				return mockResponse(http.StatusOK, tt.getBody, headers), nil
+			}
+
+			got, err := GetSecret(vaultName, secretName)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetSecret() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("GetSecret() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetLatestActiveSecret_CachesNoVersionKey(t *testing.T) {
+	const vaultName = "vault_name"
+
+	sender := &mockSender{}
+	client := newTestClient(sender)
+	headers := testHeaders()
+
+	azureClients[vaultName] = client
+	cachedSecrets = make(map[azsecrets.ID]*azsecrets.Secret, 10)
+
+	listCalls := 0
+	sender.doFunc = func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.Path, "/versions") {
+			listCalls++
+			body := `{"value":[{"id":"https://fake.vault.io/secrets/sec/ver1","attributes":{"enabled":true,"created":1748300000}}]}`
+			return mockResponse(http.StatusOK, body, headers), nil
+		}
+		return mockResponse(http.StatusOK, `{"id":"https://fake.vault.io/secrets/sec/ver1","value":"cachedValue"}`, headers), nil
+	}
+
+	first, err := GetSecret(vaultName, "sec")
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+	second, err := GetSecret(vaultName, "sec")
+	if err != nil {
+		t.Fatalf("second call failed: %v", err)
+	}
+
+	if first != "cachedValue" || second != "cachedValue" {
+		t.Errorf("expected both calls to return cachedValue, got %q and %q", first, second)
+	}
+	if listCalls != 1 {
+		t.Errorf("expected list endpoint called once, but was called %d times", listCalls)
 	}
 }
 

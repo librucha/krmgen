@@ -1,9 +1,10 @@
 package template
 
 import (
-	"github.com/librucha/krmgen/internal/template/argocd"
 	"os"
 	"testing"
+
+	"github.com/librucha/krmgen/internal/template/argocd"
 )
 
 func Test_EvalGoTemplates(t *testing.T) {
@@ -11,10 +12,11 @@ func Test_EvalGoTemplates(t *testing.T) {
 		text string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
+		name         string
+		args         args
+		want         string
+		wantErr      bool
+		requireAzure bool
 	}{
 		{
 			name: "builtin function",
@@ -80,10 +82,26 @@ func Test_EvalGoTemplates(t *testing.T) {
 			want:    `Prefix {{ anyTotallyUnknownFunc }} suffix`,
 			wantErr: false,
 		},
+		// Azure secret — require real Azure credentials, skipped in unit test runs
+		{
+			name:         "azure secret",
+			args:         args{`Prefix {{ azSec "vault_name" "key_id" }} suffix`},
+			want:         "Prefix secretValue suffix",
+			requireAzure: true,
+		},
+		{
+			name:         "azure secret with version",
+			args:         args{`Prefix {{ azSec "vault_name" "key_id" "version" }} suffix`},
+			want:         "Prefix secretValue suffix",
+			requireAzure: true,
+		},
 	}
 	for _, tt := range tests {
 		_ = os.Setenv(argocd.EnvEnvKeyPrefix+"TEST_KEY", "ArgoCD data")
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.requireAzure && os.Getenv("AZURE_TENANT_ID") == "" {
+				t.Skip("skipping: requires Azure credentials (AZURE_TENANT_ID not set)")
+			}
 			got, err := EvalGoTemplates(tt.args.text)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EvalGoTemplates() error = %v, wantErr %v", err, tt.wantErr)

@@ -3,7 +3,6 @@ package azsec
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
-	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -59,12 +58,12 @@ func TestGetPfxKey(t *testing.T) {
 			headers := http.Header{}
 			headers.Set("WWW-Authenticate", `Bearer authorization="https://login.windows.net/d5069782-a6df-436e-bac4-67b0c78175c8", resource="not_empty"`)
 
+			listBody := `{"value":[{"id":"https://fake.vault.io/secrets/key_id/ver1","attributes":{"enabled":true,"created":1000000000}}]}`
 			sender.doFunc = func(r *http.Request) (*http.Response, error) {
-				return &http.Response{
-					StatusCode: tt.resStatus,
-					Header:     headers,
-					Body:       io.NopCloser(strings.NewReader(tt.resBody)),
-				}, nil
+				if strings.Contains(r.URL.Path, "/versions") {
+					return mockResponse(http.StatusOK, listBody, headers), nil
+				}
+				return mockResponse(tt.resStatus, tt.resBody, headers), nil
 			}
 
 			got, err := GetPfxKey(tt.args.vaultName, tt.args.keyArgs...)
@@ -128,12 +127,12 @@ func TestGetPfxCert(t *testing.T) {
 			headers := http.Header{}
 			headers.Set("WWW-Authenticate", `Bearer authorization="https://login.windows.net/d5069782-a6df-436e-bac4-67b0c78175c8", resource="not_empty"`)
 
+			listBody := `{"value":[{"id":"https://fake.vault.io/secrets/key_id/ver1","attributes":{"enabled":true,"created":1000000000}}]}`
 			sender.doFunc = func(r *http.Request) (*http.Response, error) {
-				return &http.Response{
-					StatusCode: tt.resStatus,
-					Header:     headers,
-					Body:       io.NopCloser(strings.NewReader(tt.resBody)),
-				}, nil
+				if strings.Contains(r.URL.Path, "/versions") {
+					return mockResponse(http.StatusOK, listBody, headers), nil
+				}
+				return mockResponse(tt.resStatus, tt.resBody, headers), nil
 			}
 
 			got, err := GetPfxCert(tt.args.vaultName, tt.args.keyArgs...)
