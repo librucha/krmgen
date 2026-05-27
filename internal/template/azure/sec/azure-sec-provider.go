@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/pem"
 	"fmt"
+	"strings"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
-	"strings"
 )
 
 const SecFunc = "azSec"
