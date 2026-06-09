@@ -35,6 +35,7 @@ krmgen generate <path>
          ▼
   1. Copy source directory to temp dir
      Evaluate Go templates in every file
+     (files matching skip patterns are copied as-is)
          │
          ▼
   2. Find krmgen.yaml  (kind: KrmGen)
@@ -59,6 +60,7 @@ The key insight is step 1: **all files are Go-template-evaluated before Helm or 
 - **Azure Key Vault integration** — fetch secrets, certificates, and keys directly into templates
 - **ArgoCD & Kubernetes env vars** — read `ARGOCD_ENV_*` / `ARGOCD_APP_*` / `KUBE_*` variables
 - **Local file inclusion** — embed file contents into templates with `readF`
+- **Skip patterns** — exclude binary or generated files from template evaluation via glob patterns (`*.pfx`, `assets/*.png`)
 - **OCI registry support** — Helm charts from OCI registries (`oci://`)
 - **Docker image** — `librucha/krmgen` available for CI pipelines
 
@@ -144,6 +146,11 @@ metadata:                          # optional, not propagated to output resource
   annotations:
     note: some-note
 
+skip:                              # optional — glob patterns of files to copy without template evaluation
+  - "*.pfx"                        #   matches any .pfx file regardless of directory depth
+  - "*.png"
+  - "certs/*.pem"                  #   directory-scoped: only .pem files inside certs/
+
 helm:
   charts:
     - name: <chart-name>           # required — Helm chart name
@@ -160,6 +167,14 @@ helm:
 ```
 
 > Any string value in this file can use Go template syntax, e.g. `'{{ argocdEnv "MY_VAR" }}'`
+
+The `--skip` flag can also be passed on the command line and is merged with patterns from `krmgen.yaml`:
+
+```bash
+krmgen generate . --skip='*.pfx' --skip='assets/*.png'
+```
+
+Patterns use [`filepath.Match`](https://pkg.go.dev/path/filepath#Match) syntax. A pattern is tested against both the full relative path and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx` without needing a directory prefix.
 
 ### JSON Schema
 
@@ -360,6 +375,37 @@ stringData:
   tls.crt: '{{ azPfxCrt "my-vault" "tls-cert" }}'
   storage-key: '{{ azStoreKey "sub-id" "my-rg" "mystorageaccount" }}'
 ```
+
+### Skipping binary files
+
+When a source directory contains binary files (certificates, images, archives), template evaluation would fail on them. Use `skip` to copy them unchanged:
+
+```yaml
+# krmgen.yaml
+apiVersion: krmgen.config.librucha.com/v1alpha1
+kind: KrmGen
+
+skip:
+  - "*.pfx"        # PKCS#12 bundles
+  - "*.p12"
+  - "*.png"
+  - "*.jpg"
+
+helm:
+  charts:
+    - name: my-app
+      repo: https://charts.example.com
+      releaseName: my-app
+      version: 1.0.0
+```
+
+Alternatively, pass patterns at call time without modifying `krmgen.yaml`:
+
+```bash
+krmgen generate . --skip='*.pfx' --skip='*.p12'
+```
+
+Both sources are merged and deduplicated, so you can combine project-level defaults in `krmgen.yaml` with ad-hoc overrides on the CLI.
 
 ### OCI registry with credentials
 

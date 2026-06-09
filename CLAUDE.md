@@ -12,9 +12,11 @@ The core idea: take a `krmgen.yaml` config + optional `kustomization.yaml`, run 
 krmgen.go          → entry point, wires version into cmd
 cmd/root.go        → cobra root command
 cmd/generate.go    → "generate <path>" command:
-                      1. copy src dir to temp dir (evaluating Go templates in all files)
-                      2. find KrmGen config files (kind: KrmGen)
-                      3. ProcessConfig → helm + kustomize → stdout
+                      1. read skip patterns from krmgen.yaml (pre-copy, raw YAML)
+                      2. copy src dir to temp dir (evaluating Go templates in all files
+                         except those matching skip patterns — copied as-is)
+                      3. find KrmGen config files (kind: KrmGen)
+                      4. ProcessConfig → helm + kustomize → stdout
 
 internal/
   types.go              → Config, Helm, HelmChart, SecreteProvider types
@@ -64,6 +66,28 @@ version/version.go      → AppVersion global var set at build time
 | `kubeEnv <key> [default]` | Read `KUBE_<key>` env var |
 | `readF <relpath> [default]` | Read local file relative to source dir |
 | All sprig functions | Except `env` and `expandenv` (security) |
+
+## Skipping template evaluation
+
+Files matching a glob pattern can be excluded from Go template evaluation (e.g. binary files, certificates).
+They are still copied to the working directory unchanged.
+
+**Via `krmgen.yaml`** (version-controlled, applied per project):
+```yaml
+kind: KrmGen
+skip:
+  - "*.pfx"
+  - "*.png"
+  - "certs/*.pem"
+```
+
+**Via CLI flag** (ad-hoc, overrides/extends config):
+```bash
+krmgen generate . --skip='*.pfx' --skip='assets/*.png'
+```
+
+Patterns use `filepath.Match` syntax. Each pattern is tested against both the full relative path
+and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx` without a directory prefix.
 
 ## Environment variables
 

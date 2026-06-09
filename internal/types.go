@@ -9,6 +9,7 @@ type Config struct {
 	Kind       string    `yaml:"kind"`
 	Metadata   *Metadata `yaml:"metadata"`
 	Helm       *Helm     `yaml:"helm"`
+	Skip       []string  `yaml:"skip"`
 }
 
 func (config Config) HasHelm() bool {

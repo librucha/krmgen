@@ -11,6 +11,8 @@ import (
 )
 
 func NewGenerateCommand() *cobra.Command {
+	var skipPatterns []string
+
 	command := &cobra.Command{
 		Use:     "generate <path>",
 		Short:   "Generate KRM by declared config",
@@ -26,29 +28,62 @@ func NewGenerateCommand() *cobra.Command {
 			if err != nil {
 				log.Fatal(err)
 			}
-			workDir := copySrcDir(srcDir)
+			configPatterns := config.ReadSkipPatterns(srcDir)
+			merged := mergeSkipPatterns(configPatterns, skipPatterns)
+			workDir := copySrcDir(srcDir, merged)
 			processWorkDir(workDir)
 			defer func(path string) {
 				_ = os.RemoveAll(path)
 			}(workDir)
 		},
 	}
+
+	command.Flags().StringArrayVar(&skipPatterns, "skip", nil, "glob pattern(s) of files to copy without template evaluation (e.g. *.pfx, assets/*.png)")
+
 	return command
 }
 
-func copySrcDir(srcDir string) string {
+// mergeSkipPatterns combines config-level and CLI-level skip patterns, preserving order and removing duplicates.
+func mergeSkipPatterns(a, b []string) []string {
+	seen := make(map[string]struct{}, len(a)+len(b))
+	var result []string
+	for _, p := range append(a, b...) {
+		if _, ok := seen[p]; !ok {
+			seen[p] = struct{}{}
+			result = append(result, p)
+		}
+	}
+	return result
+}
 
+// matchesSkipPattern reports whether relPath matches any glob pattern.
+// Each pattern is tested against both the full relative path and just the base filename,
+// so "*.pfx" matches "certs/prod/cert.pfx" without needing a directory prefix.
+func matchesSkipPattern(relPath string, patterns []string) bool {
+	name := filepath.Base(relPath)
+	for _, pattern := range patterns {
+		if matched, _ := filepath.Match(pattern, name); matched {
+			return true
+		}
+		if matched, _ := filepath.Match(pattern, relPath); matched {
+			return true
+		}
+	}
+	return false
+}
+
+func copySrcDir(srcDir string, skipPatterns []string) string {
 	workDir, err := os.MkdirTemp(os.TempDir(), "krmgen")
 	if err != nil {
 		log.Fatalf("creating working dir in %s failed error: %s", os.TempDir(), err)
 	}
 
-	copyDir(srcDir, workDir)
+	copyDir(srcDir, workDir, srcDir, skipPatterns)
 
 	return workDir
 }
 
-func copyDir(srcDir string, dstDir string) {
+func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string) {
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
 		log.Fatalf("reading source directory %s failed error: %s", srcDir, err)
@@ -62,23 +97,30 @@ func copyDir(srcDir string, dstDir string) {
 			if err != nil {
 				log.Fatalf("crating directory %s failed error: %s", dstPath, err)
 			}
-			copyDir(filepath.Join(srcDir, entry.Name()), dstPath)
+			copyDir(srcPath, dstPath, baseDir, skipPatterns)
 		} else {
 			fileContent, err := os.ReadFile(srcPath)
 			if err != nil {
 				log.Fatalf("reading file %s failed error: %s", srcPath, err)
 			}
-			// evaluate templates
-			evaluated, err := template.EvalGoTemplates(string(fileContent))
-			if err != nil {
-				log.Fatalf("template evaluation of file %s failed error: %s", srcPath, err)
-			}
-			err = os.WriteFile(dstPath, []byte(evaluated), os.ModePerm)
-			if err != nil {
-				log.Fatalf("writing evaluated file %s failed error: %s", srcPath, err)
+			relPath, _ := filepath.Rel(baseDir, srcPath)
+			if matchesSkipPattern(relPath, skipPatterns) {
+				err = os.WriteFile(dstPath, fileContent, os.ModePerm)
+				if err != nil {
+					log.Fatalf("writing file %s failed error: %s", srcPath, err)
+				}
+			} else {
+				// evaluate templates
+				evaluated, err := template.EvalGoTemplates(string(fileContent))
+				if err != nil {
+					log.Fatalf("template evaluation of file %s failed error: %s", srcPath, err)
+				}
+				err = os.WriteFile(dstPath, []byte(evaluated), os.ModePerm)
+				if err != nil {
+					log.Fatalf("writing evaluated file %s failed error: %s", srcPath, err)
+				}
 			}
 		}
-
 	}
 }
 
