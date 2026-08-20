@@ -186,9 +186,26 @@ process environment. Use `argocdEnv` or `kubeEnv` instead.
 
 ### Caching
 
-Every Azure lookup is cached in memory for the lifetime of the process, keyed by
-the full resource ID. Two references to the same secret cause one network call.
-The cache is never invalidated during a run.
+Each Azure provider keeps an in-memory, per-process cache intended to turn two
+references to the same resource into one network call. In practice, only one
+of the four lookup paths does this correctly:
+
+- **`azSec` without a version** works as intended: `getLatestActiveSecret`
+  re-saves the resolved secret under the same no-version key that lookups use,
+  so a second reference to the same vault/secret pair is served from cache.
+- **`azSec` with an explicit version**, **`azCert`**, and **`azKey`** each
+  save the result under the resource ID Azure returns in the response, while
+  lookups are keyed by a locally constructed ID built from `<vaultUrl>/<name>/<version>`.
+  Azure's real IDs contain an extra path segment (e.g. `.../secrets/<name>/<version>`,
+  `.../keys/<name>/<version>`) that the local key never contains, so the two
+  never match. The cache entry is written but is unreachable — every reference
+  to the same secret/certificate/key re-fetches from Azure.
+
+**Known deviation:** for `azKey` specifically, the unreachable entry is also
+the wrong shape — it stores an empty `KeyBundle{}` rather than the fetched
+key, so a cache hit (impossible today, but a latent risk of any future fix to
+the ID mismatch) would dereference a nil `Key` field and panic. This is
+recorded as current behaviour; it is not fixed in this phase.
 
 ### Naming note
 
