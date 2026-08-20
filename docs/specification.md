@@ -136,7 +136,66 @@ recorded as current behaviour; it is fixed in phase 3 of the refactoring plan.
 
 ## 4. Template functions
 
-To be completed in Task 4.
+Every file copied to the working directory is evaluated as a Go template, unless
+it matches a skip pattern. Available functions:
+
+### krmgen
+
+| Function | Arity | Returns |
+|---|---|---|
+| `krmgenVer` | 0 | Current krmgen version |
+| `krmgenGenerated` | 0 | `krmgen-<version>`, intended as a label value |
+
+### Environment
+
+| Function | Arity | Returns |
+|---|---|---|
+| `argocdEnv <key> [default]` | 1–2 | `ARGOCD_ENV_<key>`, then `ARGOCD_APP_<key>`; error if unset and no default |
+| `kubeEnv <key> [default]` | 1–2 | `KUBE_<key>`; error if unset and no default |
+| `readF <relpath> [default]` | 1–2 | File contents; path must be relative; error if unreadable and no default |
+
+### Azure
+
+| Function | Arity | Returns |
+|---|---|---|
+| `azSec <vault> <secret> [version]` | 2–3 | Key Vault secret value |
+| `azCert <vault> <cert> [version]` | 2–3 | Key Vault certificate, PEM-encoded |
+| `azKey <vault> <key> [version]` | 2–3 | Key Vault key |
+| `azPfxKey <vault> <secret> [version]` | 2–3 | Private key extracted from a PKCS12 secret |
+| `azPfxCrt <vault> <secret> [version]` | 2–3 | Certificate chain extracted from a PKCS12 secret |
+| `azStoreKey <subscription> <resourceGroup> <account>` | 3 | Storage account key |
+| `azUaIdClientId <resourceGroup> <name>` | 2 | Client ID of a user-assigned managed identity |
+| `toPem <type> <data>` | 2 | Wraps bytes in a PEM block |
+
+`azPfxKey` and `azPfxCrt` forward their arguments to the same secret lookup as
+`azSec` before extracting the key or certificate, so they accept the same
+optional version argument.
+
+Only `azSec` resolves an omitted version by scanning all versions of the secret
+and selecting the latest **enabled** version whose `notBefore` is not in the
+future. `azCert` and `azKey` do not perform this scan: omitting the version
+argument passes an empty version straight to the Key Vault API, which returns
+that service's own notion of the current version, without any client-side
+enabled/`notBefore` filtering.
+
+### Sprig
+
+All [sprig](https://masterminds.github.io/sprig/) functions are available, except
+`env` and `expandenv`, which are removed so that templates cannot read arbitrary
+process environment. Use `argocdEnv` or `kubeEnv` instead.
+
+### Caching
+
+Every Azure lookup is cached in memory for the lifetime of the process, keyed by
+the full resource ID. Two references to the same secret cause one network call.
+The cache is never invalidated during a run.
+
+### Naming note
+
+`azUaIdClientId` is inconsistent with the other Azure functions. Renaming it to
+`azClientId`, keeping the old name as an alias, is proposed for phase 3 — where
+the function moves to the `cloud-go-templates` library and a rename can be
+released together with the new module.
 
 ## 5. External tool support matrix
 

@@ -462,7 +462,7 @@ docker run --rm -v "$(pwd):/workspace" librucha/krmgen:latest krmgen generate /w
 | `KRMGEN_HELM_EXECUTABLE` | Override path to `helm` binary |
 | `KRMGEN_HELM_USERNAME` | Helm repo username (fallback if not set in `krmgen.yaml`) |
 | `KRMGEN_HELM_PASSWORD` | Helm repo password (fallback if not set in `krmgen.yaml`) |
-| `KRMGEN_KUBECTL_EXECUTABLE` | Override path to `kubectl` binary |
+| `KRMGEN_KUBECTL_EXECUTABLE` | Declared but not implemented — kubectl is always invoked from PATH (see specification) |
 
 For Azure authentication, krmgen uses the standard Azure SDK environment variables:
 

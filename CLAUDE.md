@@ -40,7 +40,7 @@ internal/
       cert/             → azCert (Key Vault certificates)
       key/              → azKey (Key Vault keys)
       storage/          → azStoreKey (Storage account key)
-      identity/         → azClientId (Managed Identity client ID)
+      identity/         → azUaIdClientId (Managed Identity client ID)
       commons/          → shared subscription helpers
   tool/tool.go          → RunCommand wrapper for external binaries
   utils/constants.go    → env var name constants
@@ -60,8 +60,8 @@ version/version.go      → AppVersion global var set at build time
 | `azPfxCrt <vault> <secret>` | Extract certificate(s) from PKCS12 secret |
 | `azCert <vault> <cert> [version]` | Azure Key Vault certificate (PEM) |
 | `azKey <vault> <key> [version]` | Azure Key Vault key |
-| `azStoreKey <account> <group>` | Azure Storage account key |
-| `azClientId <sub> <group> <name>` | Azure Managed Identity client ID |
+| `azStoreKey <subscription> <resourceGroup> <account>` | Azure Storage account key |
+| `azUaIdClientId <resourceGroup> <name>` | Azure Managed Identity client ID |
 | `argocdEnv <key> [default]` | Read `ARGOCD_ENV_<key>` / `ARGOCD_APP_<key>` |
 | `kubeEnv <key> [default]` | Read `KUBE_<key>` env var |
 | `readF <relpath> [default]` | Read local file relative to source dir |
@@ -96,7 +96,7 @@ and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx` without a direct
 | `KRMGEN_HELM_EXECUTABLE` | Override helm binary path |
 | `KRMGEN_HELM_USERNAME` | Helm repo username (fallback if not in config) |
 | `KRMGEN_HELM_PASSWORD` | Helm repo password (fallback if not in config) |
-| `KRMGEN_KUBECTL_EXECUTABLE` | Override kubectl binary path |
+| `KRMGEN_KUBECTL_EXECUTABLE` | Declared but not implemented — kubectl is always invoked from PATH (see specification) |
 
 ## Build & development
 
