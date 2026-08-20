@@ -79,7 +79,38 @@ func templateHelm(generator generator, workDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("run command %q finished with error %v. Error output %v", helmExecutable(), err, stdErr)
 	}
-	return stdOut, nil
+	return stripHelmBanner(stdOut), nil
+}
+
+// helmBannerPrefixes are informational lines Helm v4 writes to stdout (not stderr)
+// before the rendered manifests when a chart is pulled from an OCI registry.
+// They are not valid YAML and break downstream processing (e.g. kustomize).
+var helmBannerPrefixes = []string{
+	"Pulled: ",
+	"Digest: ",
+	"Signed by: ",
+	"Chart Hash Verified: ",
+}
+
+// stripHelmBanner removes the Helm banner lines from the beginning of helm template output.
+func stripHelmBanner(output string) string {
+	for {
+		line, rest, _ := strings.Cut(output, "\n")
+		if !isHelmBannerLine(line) {
+			return output
+		}
+		output = rest
+	}
+}
+
+func isHelmBannerLine(line string) bool {
+	line = strings.TrimSuffix(line, "\r")
+	for _, prefix := range helmBannerPrefixes {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
