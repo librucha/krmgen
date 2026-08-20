@@ -232,22 +232,27 @@ krmgen invokes `helm` and `kubectl` as external binaries. Which binary is used:
 
 ### Known differences between helm versions
 
-**helm 4 writes OCI pull progress to stdout; krmgen does not strip it.** When a
-chart is pulled from an OCI registry, helm 4 prints `Pulled: <ref>` and
+**helm 4 writes OCI pull progress to stdout; krmgen strips it.** When a chart
+is pulled from an OCI registry, helm 4 prints `Pulled: <ref>` and
 `Digest: <sha256>` to **stdout**, ahead of the rendered manifests. helm 3 does
-not print these lines. Verified directly against `oci://ghcr.io/stakater/charts/reloader`
-with both binaries, and again by running `krmgen generate` against an
-OCI-chart fixture with `KRMGEN_HELM_EXECUTABLE` pointed at each binary in turn:
-the helm 3 run and the helm 4 run both exit 0, but the helm 4 output is not
-byte-identical to the helm 3 output — it carries the extra `Pulled:` and
-`Digest:` lines at the very start, verbatim, ahead of the first `---`. As of
-this writing krmgen contains no code that strips or otherwise recognizes these
-lines (searched `internal/` and `cmd/` for `Pulled`, `Digest`, `Signed by`,
-`Chart Hash`, `strip` — no matches). This means that, on helm 4 with an
-OCI-sourced chart, krmgen's stdout is not pure rendered YAML, which conflicts
-with the stdout guarantee in section 1. This is recorded as current behaviour,
-not as a guarantee that any stripping happens; fixing it is in scope for the
-refactoring this document supports.
+not print these lines. krmgen removes this: `templateHelm` in
+`internal/helm/processor.go` passes helm's stdout through `stripHelmBanner`,
+which removes a **leading contiguous run** of lines starting with `Pulled: `,
+`Digest: `, `Signed by: ` or `Chart Hash Verified: `, stopping at the first
+line that does not match. Because only a leading run is removed, identical
+text appearing inside a rendered manifest (not at the very start of the
+output) is preserved — covered by the `stripHelmBanner` unit tests in
+`internal/helm/processor_test.go`. Verified directly against
+`oci://ghcr.io/stakater/charts/reloader` with both binaries, and again by
+running `krmgen generate` against an OCI-chart fixture with
+`KRMGEN_HELM_EXECUTABLE` pointed at each binary in turn: both runs exit 0, and
+the `Pulled:`/`Digest:` lines are absent from both outputs — the helm 4 output
+now starts with `---` / `# Source: ...`, same as helm 3. The two outputs are
+still not fully byte-identical: the helm 4 output has three extra blank lines,
+one before each `---` document separator between rendered manifests. This is
+ordinary helm-version rendering noise unrelated to the OCI banner (both
+outputs are otherwise line-for-line the same), and is not something krmgen
+processes or strips.
 
 **Kustomize version follows kubectl.** The embedded Kustomize version is whatever
 the installed kubectl ships. Two hosts with different kubectl versions can produce
