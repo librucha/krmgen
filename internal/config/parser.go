@@ -71,16 +71,5 @@ func ParseConfig(filePath string) (*types.Config, error) {
 		return nil, err
 	}
 
-	// Validate by schema
-	// compiler := jsonschema.NewCompiler()
-	// compiler.Draft = jsonschema.Draft4
-	// schema, err := compiler.Compile("../../resources/krmgen-config-schema.json")
-	// if err != nil {
-	//	log.Fatal(err)
-	// }
-	// if err := schema.Validate(config); err != nil {
-	//	log.Fatal(err)
-	// }
-
 	return &config, nil
 }

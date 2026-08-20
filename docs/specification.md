@@ -267,8 +267,31 @@ phase 5, where two backends must be told apart in bug reports.
 
 ## 6. Backend parity exceptions
 
-To be completed in Task 6.
+The refactoring plan introduces a second, embedded backend for both helm and
+kustomize, selected by the absence of `KRMGEN_HELM_EXECUTABLE` and
+`KRMGEN_KUBECTL_EXECUTABLE`. Both backends are measured against the same golden
+files. Where they cannot agree, the difference is recorded here rather than
+treated as a defect:
+
+| Capability | External binary | Embedded library |
+|---|---|---|
+| Helm plugins | Available | **Never available** |
+| Helm post-renderers | Available | **Never available** |
+| Kustomize version | Whatever kubectl ships | Pinned in `go.mod` |
+| Helm version | Whatever the host has | Pinned in `go.mod` |
+
+Users depending on helm plugins or post-renderers must set
+`KRMGEN_HELM_EXECUTABLE` and keep the external backend.
 
 ## 7. Non-goals
 
-To be completed in Task 6.
+krmgen deliberately does not:
+
+- **Talk to a cluster.** All rendering is offline. Helm is always run in
+  client-only mode; `lookup` in charts returns nothing.
+- **Apply anything.** Output goes to stdout; deploying it is the caller's job.
+- **Manage secret lifecycle.** Template functions read secrets from Azure at
+  render time; krmgen does not create, rotate or write them back.
+- **Provide a plugin system.** Template functions are compiled in.
+- **Guarantee stable output across versions of the embedded tools.** Upgrading
+  the pinned helm or kustomize may change output; such changes are release-noted.

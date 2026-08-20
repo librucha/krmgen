@@ -1,9 +1,5 @@
 package types
 
-import (
-	"text/template"
-)
-
 type Config struct {
 	ApiVersion string    `yaml:"apiVersion"`
 	Kind       string    `yaml:"kind"`
@@ -36,12 +32,4 @@ type HelmChart struct {
 	Namespace         string         `yaml:"namespace"`
 	ValuesInline      map[string]any `yaml:"valuesInline"`
 	ValuesFile        string         `yaml:"valuesFile"`
-}
-
-type SecretFuncMap struct {
-	template.FuncMap
-}
-
-type SecreteProvider interface {
-	Provide(funcMap *SecretFuncMap)
 }
