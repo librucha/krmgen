@@ -94,16 +94,17 @@ changing it is a deliberate decision rather than an accident.
 
 ### Order of operations
 
-1. Read `skip` patterns from every `kind: KrmGen` file in the source directory.
-   This happens on the **raw YAML**, before any template evaluation — the patterns
-   themselves cannot be templated.
+1. Read `skip` patterns from every `kind: KrmGen` file at the top level of the
+   source directory (non-recursively). This happens on the **raw YAML**, before
+   any template evaluation — the patterns themselves cannot be templated.
 2. Merge config-level `skip` patterns with `--skip` flags. Order is preserved,
    duplicates removed, config patterns first.
 3. Copy the source directory to a temporary working directory. Every file is
    evaluated as a Go template **except** files matching a skip pattern, which are
    copied byte-for-byte.
-4. For each `kind: KrmGen` file in the working directory: run helm for every
-   declared chart, concatenating the output in declaration order.
+4. For each `kind: KrmGen` file at the top level of the working directory
+   (non-recursively): run helm for every declared chart, concatenating the
+   output in declaration order.
 5. If a kustomization file exists anywhere in the working directory, feed the helm
    output into it and let kustomize produce the final result.
 6. Write the result to stdout.
