@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/librucha/krmgen/resources/krmgen-config-schema.json",
+  "title": "KrmGen configuration",
+  "type": "object",
+  "required": ["kind"],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "description": "API version, e.g. krmgen.config.librucha.com/v1alpha1"
+    },
+    "kind": {
+      "const": "KrmGen",
+      "description": "Discriminator identifying a krmgen config file"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "skip": {
+      "type": "array",
+      "description": "Glob patterns of files copied without Go template evaluation",
+      "items": { "type": "string" }
+    },
+    "helm": {
+      "type": "object",
+      "properties": {
+        "charts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/helmChart" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "helmChart": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "repo": { "type": "string" },
+        "ignoreCredentials": { "type": "boolean" },
+        "repoUser": { "type": "string" },
+        "repoPassword": { "type": "string" },
+        "releaseName": { "type": "string" },
+        "version": { "type": "string" },
+        "namespace": { "type": "string" },
+        "valuesFile": { "type": "string" },
+        "valuesInline": { "type": "object" }
+      }
+    }
+  }
+}

@@ -42,7 +42,53 @@ rely on a specific non-zero value beyond "non-zero means failure".
 
 ## 2. Configuration
 
-To be completed in Task 2.
+krmgen looks for config files in the **top level** of the source directory (not
+recursively). A file is a krmgen config when its parsed YAML has `kind: KrmGen`.
+Every matching file is processed; each produces its own output block.
+
+The machine-readable contract is [`resources/krmgen-config-schema.json`](../resources/krmgen-config-schema.json).
+
+### Example
+
+```yaml
+apiVersion: krmgen.config.librucha.com/v1alpha1
+kind: KrmGen
+skip:
+  - "*.pfx"
+helm:
+  charts:
+    - name: app
+      repo: oci://registry.example.com/helm/app
+      version: 3.0.0
+      releaseName: app
+      namespace: default
+      valuesFile: values.yaml
+      valuesInline:
+        replicaCount: 2
+```
+
+### Fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `apiVersion` | string | no | Informational; not validated against a known set |
+| `kind` | string | **yes** | Must be `KrmGen` |
+| `metadata.labels` | map[string]string | no | Currently parsed but not applied to output |
+| `metadata.annotations` | map[string]string | no | Currently parsed but not applied to output |
+| `skip` | []string | no | Glob patterns; see Rendering pipeline |
+| `helm.charts[].name` | string | **yes** | Chart name |
+| `helm.charts[].repo` | string | no | Repository URL; `oci://` selects the OCI backend, `http(s)://` the repo backend |
+| `helm.charts[].version` | string | no | Chart version; omitted means latest |
+| `helm.charts[].releaseName` | string | no | Helm release name |
+| `helm.charts[].namespace` | string | no | Target namespace |
+| `helm.charts[].repoUser` | string | no | Falls back to `KRMGEN_HELM_USERNAME` |
+| `helm.charts[].repoPassword` | string | no | Falls back to `KRMGEN_HELM_PASSWORD` |
+| `helm.charts[].ignoreCredentials` | bool | no | When true, no credentials are passed even if available |
+| `helm.charts[].valuesFile` | string | no | Path relative to the source directory |
+| `helm.charts[].valuesInline` | object | no | Written to a temporary values file |
+
+`metadata` being parsed but unused is current behaviour, recorded here so that
+changing it is a deliberate decision rather than an accident.
 
 ## 3. Rendering pipeline
 
