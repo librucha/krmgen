@@ -56,8 +56,8 @@ version/version.go      → AppVersion global var set at build time
 | `krmgenGenerated` | "krmgen-<version>" label value |
 | `azSec <vault> <secret> [version]` | Azure Key Vault secret |
 | `toPem <type> <data>` | Wrap bytes in PEM block |
-| `azPfxKey <vault> <secret>` | Extract private key from PKCS12 secret |
-| `azPfxCrt <vault> <secret>` | Extract certificate(s) from PKCS12 secret |
+| `azPfxKey <vault> <secret> [version]` | Extract private key from PKCS12 secret |
+| `azPfxCrt <vault> <secret> [version]` | Extract certificate(s) from PKCS12 secret |
 | `azCert <vault> <cert> [version]` | Azure Key Vault certificate (PEM) |
 | `azKey <vault> <key> [version]` | Azure Key Vault key |
 | `azStoreKey <subscription> <resourceGroup> <account>` | Azure Storage account key |
