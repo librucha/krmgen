@@ -92,7 +92,46 @@ changing it is a deliberate decision rather than an accident.
 
 ## 3. Rendering pipeline
 
-To be completed in Task 3.
+### Order of operations
+
+1. Read `skip` patterns from every `kind: KrmGen` file in the source directory.
+   This happens on the **raw YAML**, before any template evaluation — the patterns
+   themselves cannot be templated.
+2. Merge config-level `skip` patterns with `--skip` flags. Order is preserved,
+   duplicates removed, config patterns first.
+3. Copy the source directory to a temporary working directory. Every file is
+   evaluated as a Go template **except** files matching a skip pattern, which are
+   copied byte-for-byte.
+4. For each `kind: KrmGen` file in the working directory: run helm for every
+   declared chart, concatenating the output in declaration order.
+5. If a kustomization file exists anywhere in the working directory, feed the helm
+   output into it and let kustomize produce the final result.
+6. Write the result to stdout.
+
+### Skip pattern matching
+
+Patterns use `filepath.Match` syntax. Each pattern is tested against **both** the
+full relative path and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx`
+without needing a directory prefix.
+
+### Kustomization discovery
+
+The working directory is walked recursively for `kustomization.yaml`,
+`kustomization.yml` or `kustomization` (case-insensitive). Finding **more than one
+is a fatal error** — krmgen will not guess which one you meant.
+
+When a kustomization exists, helm output is written to a file with a generated
+name inside the working directory and appended to that kustomization's `resources`
+list. The generated filename must never appear in the output.
+
+### Working directory lifecycle
+
+The working directory is created under the system temp directory with mode 0700
+and removed after a successful run.
+
+**Known deviation:** when rendering fails, the process exits before cleanup runs,
+leaving the working directory — including any rendered secrets — on disk. This is
+recorded as current behaviour; it is fixed in phase 3 of the refactoring plan.
 
 ## 4. Template functions
 
