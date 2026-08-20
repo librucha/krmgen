@@ -60,8 +60,8 @@ func TestSchemaRejectsInvalidConfigs(t *testing.T) {
 			content: "kind: NotKrmGen\n",
 		},
 		{
-			name:    "chart without name",
-			content: "kind: KrmGen\nhelm:\n  charts:\n    - repo: oci://reg.io/helm/app\n",
+			name:    "chart entry is not an object",
+			content: "kind: KrmGen\nhelm:\n  charts:\n    - \"not-an-object\"\n",
 		},
 		{
 			name:    "skip is not a list",

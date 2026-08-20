@@ -44,9 +44,11 @@
   "$defs": {
     "helmChart": {
       "type": "object",
-      "required": ["name"],
       "properties": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string",
+          "description": "Chart name. Not enforced by krmgen or by the OCI backend (which never puts it on the helm command line). The HTTP repo backend does need it: helm resolves the chart by name within the repo, and omitting it fails at the helm invocation, not at schema validation."
+        },
         "repo": { "type": "string" },
         "ignoreCredentials": { "type": "boolean" },
         "repoUser": { "type": "string" },
