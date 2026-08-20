@@ -216,7 +216,49 @@ released together with the new module.
 
 ## 5. External tool support matrix
 
-To be completed in Task 5.
+krmgen invokes `helm` and `kubectl` as external binaries. Which binary is used:
+
+| Variable | Effect when set | Effect when unset |
+|---|---|---|
+| `KRMGEN_HELM_EXECUTABLE` | That path is used as helm | `helm` is looked up in `PATH` |
+| `KRMGEN_KUBECTL_EXECUTABLE` | **Not implemented.** Declared but never read | `kubectl` is looked up in `PATH` |
+
+### Supported versions
+
+| Tool | Supported | Verified against |
+|---|---|---|
+| helm | 3.x, 4.x | v3.21.4, v4.2.4 |
+| kubectl | 1.3x with embedded Kustomize 5.x | v1.36.3 / Kustomize v5.8.1 |
+
+### Known differences between helm versions
+
+**helm 4 writes OCI pull progress to stdout; krmgen does not strip it.** When a
+chart is pulled from an OCI registry, helm 4 prints `Pulled: <ref>` and
+`Digest: <sha256>` to **stdout**, ahead of the rendered manifests. helm 3 does
+not print these lines. Verified directly against `oci://ghcr.io/stakater/charts/reloader`
+with both binaries, and again by running `krmgen generate` against an
+OCI-chart fixture with `KRMGEN_HELM_EXECUTABLE` pointed at each binary in turn:
+the helm 3 run and the helm 4 run both exit 0, but the helm 4 output is not
+byte-identical to the helm 3 output — it carries the extra `Pulled:` and
+`Digest:` lines at the very start, verbatim, ahead of the first `---`. As of
+this writing krmgen contains no code that strips or otherwise recognizes these
+lines (searched `internal/` and `cmd/` for `Pulled`, `Digest`, `Signed by`,
+`Chart Hash`, `strip` — no matches). This means that, on helm 4 with an
+OCI-sourced chart, krmgen's stdout is not pure rendered YAML, which conflicts
+with the stdout guarantee in section 1. This is recorded as current behaviour,
+not as a guarantee that any stripping happens; fixing it is in scope for the
+refactoring this document supports.
+
+**Kustomize version follows kubectl.** The embedded Kustomize version is whatever
+the installed kubectl ships. Two hosts with different kubectl versions can produce
+different output from the same input. This is the primary reason the refactoring
+plan moves to a pinned library.
+
+### Version detection
+
+krmgen does not currently detect or report the version of the external tools it
+invokes. Adding a startup check that records both versions is a requirement for
+phase 5, where two backends must be told apart in bug reports.
 
 ## 6. Backend parity exceptions
 
