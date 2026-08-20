@@ -154,9 +154,9 @@ skip:                              # optional — glob patterns of files to copy
 
 helm:
   charts:
-    - name: <chart-name>           # required — Helm chart name
+    - name: <chart-name>           # required for HTTP(S) repos (helm resolves the chart by this name); NOT used by oci:// repos — see specification
       repo: <repo-url>             # required — HTTP(S) or oci:// repo URL
-      releaseName: <release>       # required — Helm release name
+      releaseName: <release>       # required — helm rejects an empty release name (krmgen and the schema don't enforce this; helm does)
       version: <version>           # optional — chart version (latest if omitted)
       namespace: <namespace>       # optional — target namespace
       ignoreCredentials: false     # optional — skip auth for public OCI repos
