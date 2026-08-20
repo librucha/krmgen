@@ -19,7 +19,7 @@ cmd/generate.go    → "generate <path>" command:
                       4. ProcessConfig → helm + kustomize → stdout
 
 internal/
-  types.go              → Config, Helm, HelmChart, SecreteProvider types
+  types.go              → Config, Metadata, Helm, HelmChart types
   config/parser.go      → IsConfigFile, ParseConfig (YAML unmarshal)
   config/processor.go   → ProcessConfig: orchestrates helm + kustomize
   helm/
