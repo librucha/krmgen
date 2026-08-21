@@ -178,3 +178,54 @@ func TestGolden_HelmOnly(t *testing.T) {
 	}
 	assertGolden(t, "helm-only", res.stdout)
 }
+
+func TestGolden_KustomizeOnly(t *testing.T) {
+	res := runScenario(t, "kustomize-only")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "kustomize-only", res.stdout)
+}
+
+func TestGolden_HelmWithKustomize(t *testing.T) {
+	res := runScenario(t, "helm-with-kustomize")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "helm-with-kustomize", res.stdout)
+	if strings.Contains(res.stdout, "Pulled:") || strings.Contains(res.stdout, "Digest:") {
+		t.Error("helm banner leaked into the output")
+	}
+}
+
+func TestGolden_SkipPatterns(t *testing.T) {
+	res := runScenario(t, "skip-patterns")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "skip-patterns", res.stdout)
+}
+
+func TestGolden_TemplateFunctions(t *testing.T) {
+	t.Setenv("ARGOCD_ENV_MESSAGE", "from-env")
+	res := runScenario(t, "template-functions")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "template-functions", res.stdout)
+	if !strings.Contains(res.stdout, "from-env") {
+		t.Error("argocdEnv value did not reach the rendered output")
+	}
+	if !strings.Contains(res.stdout, "fallback-release") {
+		t.Error("kubeEnv default did not reach the release name")
+	}
+}
+
+func TestGolden_StdoutCarriesOnlyYaml(t *testing.T) {
+	res := runScenario(t, "helm-with-kustomize")
+	for i, line := range strings.Split(strings.TrimSpace(res.stdout), "\n") {
+		if strings.HasPrefix(line, "level=") || strings.HasPrefix(line, "time=") {
+			t.Errorf("line %d on stdout is a log line, not YAML: %q", i+1, line)
+		}
+	}
+}
