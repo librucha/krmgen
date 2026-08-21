@@ -318,10 +318,39 @@ network calls.
 
 ### Naming note
 
-`azUaIdClientId` is inconsistent with the other Azure functions. Renaming it to
-`azClientId`, keeping the old name as an alias, is proposed for phase 3 — where
-the function moves to the `cloud-go-templates` library and a rename can be
-released together with the new module.
+`azUaIdClientId` reads as an abbreviation nobody can expand on sight. It is
+renamed to **`azUserIdentityClientId`** in phase 3, where the function moves to
+the `cloud-go-templates` library and a rename ships with the new module.
+krmgen keeps `azUaIdClientId` registered as a deprecated alias of the same
+function, so existing configurations continue to work; the library itself
+exposes only the new name.
+
+The name is deliberately explicit about *user*-assigned, because Azure's two
+managed-identity kinds cannot share one function. Both expose the same three
+properties — client ID, principal ID, tenant ID — but they are addressed
+differently, as the `armmsi` SDK makes plain:
+
+| | user-assigned | system-assigned |
+|---|---|---|
+| Client | `NewUserAssignedIdentitiesClient(subscriptionID, …)` | `NewSystemAssignedIdentitiesClient(…)` — no subscription |
+| Call | `Get(ctx, resourceGroup, name)` | `GetByScope(ctx, scope)` |
+| Address | resource group plus name | the host resource's full ARM ID |
+
+Folding both into one function would mean dispatching on argument count, and a
+reader could not tell the two modes apart at the call site. The naming therefore
+leaves room for a symmetric family:
+
+```
+azUserIdentityClientId    <resourceGroup> <name>
+azUserIdentityPrincipalId <resourceGroup> <name>     (role assignments)
+azSystemIdentityClientId  <scope>                    (if it is ever needed)
+```
+
+In practice the user-assigned form is what KRM output needs: the
+`azure.workload.identity/client-id` annotation requires a federated credential,
+and federated credentials exist only under
+`Microsoft.ManagedIdentity/userAssignedIdentities/…` — the SDK offers no
+system-assigned equivalent.
 
 ## 5. External tool support matrix
 
@@ -414,8 +443,33 @@ its credentials are carried only on the `template` command itself.
 
 | Tool | Supported | Verified against |
 |---|---|---|
-| helm | 3.x, 4.x | v3.21.4, v4.2.4 |
-| kubectl | 1.3x with embedded Kustomize 5.x | v1.36.3 / Kustomize v5.8.1 |
+| helm | 3.8.0 and later, including 4.x | v3.8.2, v3.21.4, v4.2.4 |
+| kubectl | any release providing `kubectl kustomize` | v1.36.3 / Kustomize v5.8.1 |
+
+**Why helm 3.8.0 is the floor.** OCI registry support became generally available
+in helm 3.8.0. Earlier releases treat it as experimental and refuse to act on an
+`oci://` reference unless `HELM_EXPERIMENTAL_OCI=1` is set in the environment,
+which krmgen does not set. Measured on helm 3.7.2:
+
+```
+Error: this feature has been marked as experimental and is not enabled by
+default. Please set HELM_EXPERIMENTAL_OCI=1 in your environment to use this
+feature
+```
+
+krmgen surfaces that error and exits 1. A configuration using only HTTP(S) chart
+repositories may well work on helm releases older than 3.8.0 — every flag krmgen
+passes predates it — but that combination is untested and unsupported.
+
+**helm 2 is not supported** and will not be. It renders through a cluster-side
+Tiller, which is a different architecture from the offline rendering this
+document specifies; it reached end of life in November 2020.
+
+**The kubectl floor is set by your kustomization, not by krmgen.** krmgen invokes
+only `kubectl kustomize <dir>`, a subcommand available since kubectl 1.14. Which
+kustomization features work is decided by the Kustomize version embedded in the
+kubectl you install — see "Kustomize version follows kubectl" below. Only the
+version in the table above has been verified.
 
 ### Known differences between helm versions
 
