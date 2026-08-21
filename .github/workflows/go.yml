@@ -40,3 +40,35 @@ jobs:
         run: |
           export PATH=${PATH}:`go env GOPATH`/bin
           make build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # krmgen shells out to both binaries; the specification's support
+      # matrix pins the helm floor at 3.8.0
+      - name: Set up helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.21.4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Verify tool versions
+        run: |
+          helm version --short
+          kubectl version --client | grep -i kustomize
+
+      - name: Test
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -1
