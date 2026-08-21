@@ -318,10 +318,39 @@ network calls.
 
 ### Naming note
 
-`azUaIdClientId` is inconsistent with the other Azure functions. Renaming it to
-`azClientId`, keeping the old name as an alias, is proposed for phase 3 — where
-the function moves to the `cloud-go-templates` library and a rename can be
-released together with the new module.
+`azUaIdClientId` reads as an abbreviation nobody can expand on sight. It is
+renamed to **`azUserIdentityClientId`** in phase 3, where the function moves to
+the `cloud-go-templates` library and a rename ships with the new module.
+krmgen keeps `azUaIdClientId` registered as a deprecated alias of the same
+function, so existing configurations continue to work; the library itself
+exposes only the new name.
+
+The name is deliberately explicit about *user*-assigned, because Azure's two
+managed-identity kinds cannot share one function. Both expose the same three
+properties — client ID, principal ID, tenant ID — but they are addressed
+differently, as the `armmsi` SDK makes plain:
+
+| | user-assigned | system-assigned |
+|---|---|---|
+| Client | `NewUserAssignedIdentitiesClient(subscriptionID, …)` | `NewSystemAssignedIdentitiesClient(…)` — no subscription |
+| Call | `Get(ctx, resourceGroup, name)` | `GetByScope(ctx, scope)` |
+| Address | resource group plus name | the host resource's full ARM ID |
+
+Folding both into one function would mean dispatching on argument count, and a
+reader could not tell the two modes apart at the call site. The naming therefore
+leaves room for a symmetric family:
+
+```
+azUserIdentityClientId    <resourceGroup> <name>
+azUserIdentityPrincipalId <resourceGroup> <name>     (role assignments)
+azSystemIdentityClientId  <scope>                    (if it is ever needed)
+```
+
+In practice the user-assigned form is what KRM output needs: the
+`azure.workload.identity/client-id` annotation requires a federated credential,
+and federated credentials exist only under
+`Microsoft.ManagedIdentity/userAssignedIdentities/…` — the SDK offers no
+system-assigned equivalent.
 
 ## 5. External tool support matrix
 

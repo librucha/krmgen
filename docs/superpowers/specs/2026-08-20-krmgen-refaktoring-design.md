@@ -229,4 +229,10 @@ Spec rozhodne, která strana se přizpůsobí. U `azUaIdClientId` je k úvaze p�
    na 3.8.2 projde end-to-end. helm 2 se nepodporuje (Tiller, EOL 11/2020). U kubectl hranici
    neurčuje krmgen, ale kustomizace uživatele — krmgen volá jen `kubectl kustomize`, dostupné
    od 1.14. Zapsáno v sekci 5 specifikace.
-3. Přejmenovat `azUaIdClientId` → `azClientId` s aliasem?
+3. ~~Přejmenovat `azUaIdClientId`~~ — **vyřešeno 2026-08-21**: nové jméno je
+   `azUserIdentityClientId`, ne `azClientId`. Důvod je symetrie s budoucím
+   `azSystemIdentityClientId`: obě identity vrací stejnou trojici (client/principal/tenant ID),
+   ale adresují se různě (`Get(rg, name)` vs `GetByScope(scope)`, a system-assigned klient
+   nebere subscription), takže jedna funkce pro obojí by musela rozlišovat podle počtu
+   argumentů. Krmgen si staré jméno ponechá jako deprecated alias, knihovna vystaví jen nové.
+   Zapsáno v sekci 4 specifikace.
