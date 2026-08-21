@@ -101,8 +101,14 @@ Důvody:
 Z náčrtu se přebírá: samotné repo, seskupení po providerech (`FuncMap()` vs `AzureFuncMap()`),
 CLI na ad-hoc vyhodnocení šablony a Entra groups/apps jako pozdější přírůstek.
 
-**Předpoklad k potvrzení:** cesta modulu se sjednotí z `github.com/librucha/cgt` na
-`github.com/librucha/cloud-go-templates`. Před prvním commitem je to zdarma.
+**Rozhodnuto 2026-08-21:** cesta modulu je `github.com/librucha/cloud-go-templates`.
+
+Nešlo o volbu vkusu. Remote toho repozitáře už byl `github.com/librucha/cloud-go-templates`,
+zatímco modul se jmenoval `github.com/librucha/cgt` — a Go překládá cestu modulu na URL
+repozitáře, takže `go get github.com/librucha/cgt` by nikdy nikomu nefungoval. Přejmenováno
+včetně sedmi importů a `MODULE_NAME` v Taskfile; ověřeno, že jediná zbývající chyba překladu
+je ta původní (`internal/types/types.go:22`), nyní hlášená pod novou cestou. Zapsáno prvním
+commitem toho repozitáře (`93ebeda`).
 
 ### R5 — Kvalita kódu se rozpouští do fází, nedělá se zvlášť
 
@@ -217,6 +223,6 @@ Spec rozhodne, která strana se přizpůsobí. U `azUaIdClientId` je k úvaze p�
 
 ## 7. Otevřené otázky
 
-1. Potvrdit cestu modulu `github.com/librucha/cloud-go-templates` (R4)
+1. ~~Potvrdit cestu modulu (R4)~~ — **vyřešeno 2026-08-21**, viz R4
 2. Rozsah matice podporovaných verzí: jen helm v3 + v4, nebo i starší?
 3. Přejmenovat `azUaIdClientId` → `azClientId` s aliasem?
