@@ -224,5 +224,9 @@ Spec rozhodne, která strana se přizpůsobí. U `azUaIdClientId` je k úvaze p�
 ## 7. Otevřené otázky
 
 1. ~~Potvrdit cestu modulu (R4)~~ — **vyřešeno 2026-08-21**, viz R4
-2. Rozsah matice podporovaných verzí: jen helm v3 + v4, nebo i starší?
+2. ~~Rozsah matice podporovaných verzí~~ — **vyřešeno 2026-08-21**: spodní hranice je
+   helm **3.8.0**, kde se OCI stalo GA. Na 3.7.2 krmgen měřitelně selže (`HELM_EXPERIMENTAL_OCI`),
+   na 3.8.2 projde end-to-end. helm 2 se nepodporuje (Tiller, EOL 11/2020). U kubectl hranici
+   neurčuje krmgen, ale kustomizace uživatele — krmgen volá jen `kubectl kustomize`, dostupné
+   od 1.14. Zapsáno v sekci 5 specifikace.
 3. Přejmenovat `azUaIdClientId` → `azClientId` s aliasem?
