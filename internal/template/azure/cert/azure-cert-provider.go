@@ -41,7 +41,7 @@ func getCertFromAzure(vaultName string, certName string, certVer string) (string
 	if err != nil {
 		return "", err
 	}
-	saveToCache(*certificate.ID, &certificate.Certificate)
+	saveToCache(secretId, &certificate.Certificate)
 	return wrapCert(certificate.CER), nil
 }
 

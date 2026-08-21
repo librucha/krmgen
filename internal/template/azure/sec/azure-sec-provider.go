@@ -53,7 +53,7 @@ func getSecretFromAzure(vaultName string, keyId string, keyVer string) (string, 
 	if err != nil {
 		return "", err
 	}
-	saveToCache(*secret.ID, &secret.Secret)
+	saveToCache(secretId, &secret.Secret)
 	return *secret.Value, nil
 }
 
@@ -93,8 +93,9 @@ func getLatestActiveSecret(client *azsecrets.Client, vaultName string, keyId str
 	if err != nil {
 		return "", err
 	}
-	saveToCache(*secret.ID, &secret.Secret)
-	// also cache under the no-version key so repeated calls skip listing
+	// cache under the resolved version, so a later call naming that version hits
+	saveToCache(newId(vaultName, keyId, resolvedVer), &secret.Secret)
+	// and under the no-version key, so repeated version-less calls skip listing
 	saveToCache(noVerCacheId, &secret.Secret)
 	return *secret.Value, nil
 }
