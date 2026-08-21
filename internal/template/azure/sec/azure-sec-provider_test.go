@@ -291,3 +291,77 @@ type FakeCredential struct{}
 func (f *FakeCredential) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
 	return azcore.AccessToken{Token: "faketoken", ExpiresOn: time.Now().Add(time.Hour).UTC()}, nil
 }
+
+func TestGetSecret_CachesExplicitVersion(t *testing.T) {
+	const vaultName = "vault_name"
+
+	sender := &mockSender{}
+	client := newTestClient(sender)
+	headers := testHeaders()
+
+	azureClients[vaultName] = client
+	cachedSecrets = make(map[azsecrets.ID]*azsecrets.Secret, 10)
+
+	getCalls := 0
+	sender.doFunc = func(r *http.Request) (*http.Response, error) {
+		getCalls++
+		body := `{"id":"https://fake.vault.io/secrets/sec/ver1","value":"cachedValue"}`
+		return mockResponse(http.StatusOK, body, headers), nil
+	}
+
+	first, err := GetSecret(vaultName, "sec", "ver1")
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+	second, err := GetSecret(vaultName, "sec", "ver1")
+	if err != nil {
+		t.Fatalf("second call failed: %v", err)
+	}
+
+	if first != "cachedValue" || second != "cachedValue" {
+		t.Errorf("expected both calls to return cachedValue, got %q and %q", first, second)
+	}
+	if getCalls != 1 {
+		t.Errorf("expected secret fetched once, but the vault was called %d times", getCalls)
+	}
+}
+
+func TestGetSecret_VersionLessCallAlsoCachesResolvedVersion(t *testing.T) {
+	const vaultName = "vault_name"
+
+	sender := &mockSender{}
+	client := newTestClient(sender)
+	headers := testHeaders()
+
+	azureClients[vaultName] = client
+	cachedSecrets = make(map[azsecrets.ID]*azsecrets.Secret, 10)
+
+	vaultCalls := 0
+	sender.doFunc = func(r *http.Request) (*http.Response, error) {
+		vaultCalls++
+		if strings.Contains(r.URL.Path, "/versions") {
+			body := `{"value":[{"id":"https://fake.vault.io/secrets/sec/ver1","attributes":{"enabled":true,"created":1748300000}}]}`
+			return mockResponse(http.StatusOK, body, headers), nil
+		}
+		return mockResponse(http.StatusOK, `{"id":"https://fake.vault.io/secrets/sec/ver1","value":"cachedValue"}`, headers), nil
+	}
+
+	// resolves the latest version: one list call plus one get call
+	if _, err := GetSecret(vaultName, "sec"); err != nil {
+		t.Fatalf("version-less call failed: %v", err)
+	}
+	callsAfterResolve := vaultCalls
+
+	// naming the version that was just resolved must not hit the network again
+	got, err := GetSecret(vaultName, "sec", "ver1")
+	if err != nil {
+		t.Fatalf("explicit-version call failed: %v", err)
+	}
+
+	if got != "cachedValue" {
+		t.Errorf("GetSecret() got = %q, want %q", got, "cachedValue")
+	}
+	if vaultCalls != callsAfterResolve {
+		t.Errorf("expected the resolved version to be served from cache, but the vault was called %d more time(s)", vaultCalls-callsAfterResolve)
+	}
+}

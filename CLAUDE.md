@@ -133,12 +133,11 @@ Required external tools: `helm`, `kubectl` (both must be in PATH or configured v
 
 - All comments in English
 - No validation schema wired (commented out in `parser.go`) — can be enabled
-- Azure clients and secrets are cached in-memory per process run, but only for
-  three of the six cache-lookup paths (`azSec` without a version, `azStoreKey`,
-  `azUaIdClientId`); `azSec` with a version, `azCert` and `azKey` save under a
-  key their own lookup never uses, so the cache is written but unreachable —
-  see [`docs/specification.md`](docs/specification.md#4-template-functions),
-  Caching, for details
+- Azure clients and results are cached in-memory per process run. Every cache
+  keys off a locally constructed ID built from the function's arguments, never
+  off the resource ID Azure returns — see
+  [`docs/specification.md`](docs/specification.md#4-template-functions),
+  Caching, for the per-function keys
 - `log.Fatal` used throughout (process exits on any error — intentional for a CLI tool)
 
 ## Specification

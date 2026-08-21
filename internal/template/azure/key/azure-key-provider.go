@@ -13,7 +13,7 @@ const KeyFunc = "azKey"
 
 var azureClients = make(map[string]*azkeys.Client, 10)
 
-var cachedCerts = make(map[azkeys.ID]*azkeys.KeyBundle, 5)
+var cachedKeys = make(map[azkeys.ID]*azkeys.KeyBundle, 5)
 
 func ResolveKey(vaultName string, keyArgs ...string) (any, error) {
 	switch len(keyArgs) {
@@ -40,7 +40,7 @@ func getKeyFromAzure(vaultName string, keyName string, keyVer string) (string, e
 	if err != nil {
 		return "", err
 	}
-	saveToCache(*key.Key.KID, &azkeys.KeyBundle{})
+	saveToCache(secretId, &key.KeyBundle)
 	return wrapKey(&key.KeyBundle), nil
 }
 
@@ -70,7 +70,7 @@ func getVaultUrl(vaultName string) string {
 }
 
 func getFromCache(id azkeys.ID) *azkeys.KeyBundle {
-	cached := cachedCerts[id]
+	cached := cachedKeys[id]
 	if cached == nil {
 		return nil
 	}
@@ -78,7 +78,7 @@ func getFromCache(id azkeys.ID) *azkeys.KeyBundle {
 }
 
 func saveToCache(id azkeys.ID, secret *azkeys.KeyBundle) {
-	cachedCerts[id] = secret
+	cachedKeys[id] = secret
 }
 
 func wrapKey(key *azkeys.KeyBundle) string {

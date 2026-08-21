@@ -287,47 +287,34 @@ process environment. Use `argocdEnv` or `kubeEnv` instead.
 ### Caching
 
 Five Azure provider functions each keep an in-memory, per-process cache
-(a plain `map`) intended to turn two references to the same resource into one
-network call, across six lookup paths in total — `azSec` has two, one for an
-explicit version and one without. **Three of the six work; three don't.**
-A cache "works" when the ID a lookup constructs before checking the map is
-the same ID the corresponding fetch later saves the result under.
+(a plain `map`), across six lookup paths in total — `azSec` has two, one for an
+explicit version and one without. Two references to the same resource cause one
+network call; the cache is never invalidated during a run, and it does not
+persist between runs.
 
-**Working** — lookup key and save key match:
+Every path keys the cache by a locally constructed ID, and saves the fetched
+result under that same ID:
 
-- **`azSec` without a version** (`internal/template/azure/sec/azure-sec-provider.go`):
-  the lookup at line 41 misses on the first call, but `getLatestActiveSecret`
-  re-saves the resolved secret under that same no-version cache ID (line 98,
-  in addition to saving it under Azure's real ID at line 96), so a second
-  reference to the same vault/secret pair is served from cache.
-- **`azStoreKey`** (`internal/template/azure/storage/azure-storage-provider.go`):
-  lookup (line 19) and save (line 32) both key off the same locally computed
-  `newId(subscriptionID, resourceGroup, account)`.
-- **`azUaIdClientId`** (`internal/template/azure/identity/azure-identity-provider.go`):
-  lookup (line 27) and save (line 40) both key off the same locally computed
-  `newId(rgName, idName)`.
+| Function | Cache key |
+|---|---|
+| `azSec` (explicit version) | `<vaultUrl>/<name>/<version>` |
+| `azSec` (no version) | `<vaultUrl>/<name>/` and the resolved `<vaultUrl>/<name>/<version>` |
+| `azCert` | `<vaultUrl>/<name>/<version>` |
+| `azKey` | `<vaultUrl>/<name>/<version>` |
+| `azStoreKey` | `<subscriptionID>/<resourceGroup>/<account>` |
+| `azUaIdClientId` | `<resourceGroup>/<name>` |
 
-**Broken** — lookup key ≠ save key: each of these saves the result under the
-resource ID Azure's response returns, while the lookup a moment earlier is
-keyed by a locally constructed ID built from `<vaultUrl>/<name>/<version>`.
-Azure's real IDs contain an extra path segment the local key never contains,
-so the two never match — the cache entry is written but unreachable, and
-every reference to the same secret version/certificate/key re-fetches from
-Azure:
+`azSec` without a version stores the result twice: under the no-version key, so
+a later version-less reference skips the version listing entirely, and under the
+resolved version's key, so a later reference that names that version hits the
+same entry.
 
-- **`azSec` with an explicit version**: lookup at `azure-sec-provider.go:41`,
-  save at `:56` (Azure's real ID looks like `.../secrets/<name>/<version>`).
-- **`azCert`**: lookup at `internal/template/azure/cert/azure-cert-provider.go:31`,
-  save at `:44` (`.../certificates/<name>/<version>`).
-- **`azKey`**: lookup at `internal/template/azure/key/azure-key-provider.go:30`,
-  save at `:43` (`.../keys/<name>/<version>`).
-
-**Known deviation:** for `azKey` specifically, the unreachable entry is also
-the wrong shape — `saveToCache(*key.Key.KID, &azkeys.KeyBundle{})` stores an
-empty `KeyBundle{}` rather than the fetched key, so a cache hit (impossible
-today, but a latent risk of any future fix to the ID mismatch) would
-dereference a nil `Key` field and panic. This is recorded as current
-behaviour; it is not fixed in this phase.
+Because the key is built from the arguments rather than from the resource ID
+Azure returns, a reference that omits the version and one that names the same
+version resolve to the same entry only for `azSec`. For `azCert` and `azKey`,
+a version-less reference and an explicit-version reference to the same
+underlying resource are two separate cache entries, and therefore two
+network calls.
 
 ### Naming note
 
