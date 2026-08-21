@@ -1,0 +1,23 @@
+---
+# Source: demo/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-demo
+data:
+  message: "hello"
+  replicas: "1"
+
+---
+# Source: demo/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-demo
+spec:
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: rel-demo
+
