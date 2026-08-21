@@ -414,8 +414,33 @@ its credentials are carried only on the `template` command itself.
 
 | Tool | Supported | Verified against |
 |---|---|---|
-| helm | 3.x, 4.x | v3.21.4, v4.2.4 |
-| kubectl | 1.3x with embedded Kustomize 5.x | v1.36.3 / Kustomize v5.8.1 |
+| helm | 3.8.0 and later, including 4.x | v3.8.2, v3.21.4, v4.2.4 |
+| kubectl | any release providing `kubectl kustomize` | v1.36.3 / Kustomize v5.8.1 |
+
+**Why helm 3.8.0 is the floor.** OCI registry support became generally available
+in helm 3.8.0. Earlier releases treat it as experimental and refuse to act on an
+`oci://` reference unless `HELM_EXPERIMENTAL_OCI=1` is set in the environment,
+which krmgen does not set. Measured on helm 3.7.2:
+
+```
+Error: this feature has been marked as experimental and is not enabled by
+default. Please set HELM_EXPERIMENTAL_OCI=1 in your environment to use this
+feature
+```
+
+krmgen surfaces that error and exits 1. A configuration using only HTTP(S) chart
+repositories may well work on helm releases older than 3.8.0 — every flag krmgen
+passes predates it — but that combination is untested and unsupported.
+
+**helm 2 is not supported** and will not be. It renders through a cluster-side
+Tiller, which is a different architecture from the offline rendering this
+document specifies; it reached end of life in November 2020.
+
+**The kubectl floor is set by your kustomization, not by krmgen.** krmgen invokes
+only `kubectl kustomize <dir>`, a subcommand available since kubectl 1.14. Which
+kustomization features work is decided by the Kustomize version embedded in the
+kubectl you install — see "Kustomize version follows kubectl" below. Only the
+version in the table above has been verified.
 
 ### Known differences between helm versions
 
