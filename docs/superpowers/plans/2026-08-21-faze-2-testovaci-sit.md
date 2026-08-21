@@ -814,6 +814,11 @@ git commit -m "test: cover config processing order"
 - [ ] **Step 1: Napsat padající testy**
 
 ```go
+// fatalSentinel marks a panic raised by the fake fatalf, so an unrelated
+// panic inside the code under test is not silently reported as "fatal was
+// called" - that would turn a real crash into a passing test.
+type fatalSentinel struct{}
+
 func captureFatalf(t *testing.T, call func()) (called bool, message string) {
 	t.Helper()
 	original := fatalf
@@ -821,9 +826,17 @@ func captureFatalf(t *testing.T, call func()) (called bool, message string) {
 	fatalf = func(format string, v ...any) {
 		called = true
 		message = fmt.Sprintf(format, v...)
-		panic("fatalf")
+		panic(fatalSentinel{})
 	}
-	defer func() { _ = recover() }()
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		if _, ok := r.(fatalSentinel); !ok {
+			panic(r) // not our fatal - let the real failure surface
+		}
+	}()
 	call()
 	return
 }
