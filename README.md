@@ -24,6 +24,7 @@ Designed for GitOps pipelines (ArgoCD, Flux) where you need fully-rendered, stat
 - [Docker](#docker)
 - [Environment variables](#environment-variables)
 - [Development](#development)
+- [Specification](#specification)
 
 ---
 
@@ -153,9 +154,9 @@ skip:                              # optional — glob patterns of files to copy
 
 helm:
   charts:
-    - name: <chart-name>           # required — Helm chart name
+    - name: <chart-name>           # required for HTTP(S) repos (helm resolves the chart by this name); NOT used by oci:// repos — see specification
       repo: <repo-url>             # required — HTTP(S) or oci:// repo URL
-      releaseName: <release>       # required — Helm release name
+      releaseName: <release>       # required — helm rejects an empty release name (krmgen and the schema don't enforce this; helm does)
       version: <version>           # optional — chart version (latest if omitted)
       namespace: <namespace>       # optional — target namespace
       ignoreCredentials: false     # optional — skip auth for public OCI repos
@@ -215,11 +216,15 @@ replicas: '{{ kubeEnv "REPLICA_COUNT" "2" }}'
 
 | Function | Signature | Description |
 |---|---|---|
-| `readF` | `readF <relpath> [default]` | Read a local file relative to the source directory |
+| `readF` | `readF <relpath> [default]` | Read a local file relative to krmgen's **process working directory** (i.e. wherever you *run* `krmgen` from — not the `<path>` argument you generate against) |
 
 ```yaml
 someConfig: '{{ readF "config/app.conf" "" }}'
 ```
+
+> Run `krmgen generate` from the source directory itself if you use `readF` —
+> that is what makes the two directories coincide in the common ArgoCD CMP
+> case. See [`docs/specification.md`](docs/specification.md) for details.
 
 ### Azure Key Vault — Secrets
 
@@ -258,7 +263,7 @@ caCert: '{{ azCert "my-vault" "root-ca" }}'
 
 | Function | Signature | Description |
 |---|---|---|
-| `azKey` | `azKey <vault> <key> [version]` | Get public key in PEM format |
+| `azKey` | `azKey <vault> <key> [version]` | Get the RSA modulus in PEM format (public key material — despite the `"... PRIVATE KEY"` PEM header, this is not a usable private key) |
 
 ```yaml
 publicKey: '{{ azKey "my-vault" "signing-key" }}'
@@ -462,7 +467,7 @@ docker run --rm -v "$(pwd):/workspace" librucha/krmgen:latest krmgen generate /w
 | `KRMGEN_HELM_EXECUTABLE` | Override path to `helm` binary |
 | `KRMGEN_HELM_USERNAME` | Helm repo username (fallback if not set in `krmgen.yaml`) |
 | `KRMGEN_HELM_PASSWORD` | Helm repo password (fallback if not set in `krmgen.yaml`) |
-| `KRMGEN_KUBECTL_EXECUTABLE` | Override path to `kubectl` binary |
+| `KRMGEN_KUBECTL_EXECUTABLE` | Declared but not implemented — kubectl is always invoked from PATH (see specification) |
 
 For Azure authentication, krmgen uses the standard Azure SDK environment variables:
 
@@ -518,6 +523,17 @@ internal/
   utils/                Shared constants
 version/                Build-time version variable
 ```
+
+---
+
+## Specification
+
+[`docs/specification.md`](docs/specification.md) documents krmgen's full
+contract — CLI flags, exit codes, the rendering pipeline, every template
+function's exact behaviour (including known bugs and deviations from what
+this README describes at a glance), and the external-tool invocation. It is
+the reference used to verify parity when the underlying `helm`/`kubectl`
+binaries are replaced by embedded libraries in a later phase.
 
 ---
 
