@@ -245,7 +245,10 @@ Očekávané: FAIL, `undefined: New`. Kdyby to hlásilo něco jiného, oprav to 
 ```go
 package azure
 
-import "github.com/Azure/azure-sdk-for-go/sdk/azcore"
+import (
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+)
 
 // Option configures a Provider.
 type Option func(*config)
@@ -253,7 +256,7 @@ type Option func(*config)
 type config struct {
 	credential     azcore.TokenCredential
 	subscriptionID string
-	transport      azcore.Transporter
+	transport      policy.Transporter
 }
 
 // WithCredential supplies the credential every Azure client will use. Without
@@ -274,7 +277,7 @@ func WithSubscriptionID(id string) Option {
 // withTransport is unexported: it exists so the package's own tests can point
 // every client at a stub. Consumers configure transports through their
 // credential or environment instead.
-func withTransport(t azcore.Transporter) Option {
+func withTransport(t policy.Transporter) Option {
 	return func(c *config) { c.transport = t }
 }
 ```
