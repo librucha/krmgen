@@ -14,6 +14,10 @@ import (
 
 var allowedFileNames = map[string]any{"kustomization.yaml": nil, "kustomization.yml": nil, "kustomization": nil}
 
+// runCommand is a seam: tests replace it to observe the kubectl invocation
+// without running the binary.
+var runCommand = tool.RunCommand
+
 // FindKustomizeFile try to find files usable for 'kubectl kustomize' command.
 // Returns founded kustomization file path.
 func FindKustomizeFile(workDir string) string {
@@ -58,7 +62,7 @@ func BuildKustomize(kustomizeFile string, workDir string, resources string) stri
 		"kustomize",
 		workDir,
 	}
-	stdOut, stdErr, err := tool.RunCommand("kubectl", args...)
+	stdOut, stdErr, err := runCommand("kubectl", args...)
 	if err != nil {
 		log.Fatalf("run kubectl kustomize failed error: %s reason: %s", err, stdErr)
 	}

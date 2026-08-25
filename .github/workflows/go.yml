@@ -9,6 +9,8 @@ on:
     tags-ignore:
       - 'v*'
       - 'draft-*'
+  pull_request:
+  workflow_dispatch:
 
 
 permissions:
@@ -19,14 +21,17 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '^1.20'
-        id: go
-
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      # go-version-file resolves the toolchain from go.mod (currently 1.26.0),
+      # so checkout must run first; the previous '^1.20' pin predated go.mod's
+      # move to the post-1.21 patch-version format and could no longer even
+      # parse it.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
       - name: Get dependencies
         run: |
@@ -40,3 +45,41 @@ jobs:
         run: |
           export PATH=${PATH}:`go env GOPATH`/bin
           make build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # The golden-master suite in test/golden compares byte-for-byte against
+      # goldens generated on one specific helm/kubectl pair (see
+      # test/golden/versions_test.go). Pin CI to that exact pair so the
+      # goldens compare cleanly; the specification's support matrix (helm
+      # 3.8.0+, including 4.x) is what krmgen supports at runtime, not what
+      # the golden fixtures are anchored to.
+      - name: Set up helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v4.2.4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.3
+
+      - name: Verify tool versions
+        run: |
+          helm version --short
+          kubectl version --client | grep -i kustomize
+
+      - name: Test
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -1

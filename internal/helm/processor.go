@@ -26,6 +26,10 @@ func helmExecutable() string {
 	return helm
 }
 
+// runCommand is a seam: tests replace it to observe the helm invocation
+// without running the binary.
+var runCommand = tool.RunCommand
+
 func TemplateHelmCharts(helmConfig *types.Helm, workDir string) (string, error) {
 
 	helmOutput := strings.Builder{}
@@ -75,7 +79,7 @@ func templateHelm(generator generator, workDir string) (string, error) {
 	}
 	args = append(args, valuesArgs...)
 
-	stdOut, stdErr, err := tool.RunCommand(helmExecutable(), args...)
+	stdOut, stdErr, err := runCommand(helmExecutable(), args...)
 	if err != nil {
 		return "", fmt.Errorf("run command %q finished with error %v. Error output %v", helmExecutable(), err, stdErr)
 	}

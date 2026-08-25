@@ -1,14 +1,20 @@
 package helm
 
 import (
+	"errors"
+	"fmt"
+	types "github.com/librucha/krmgen/internal"
 	cons "github.com/librucha/krmgen/internal/utils"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 )
 
 func Test_helmExecutable(t *testing.T) {
-	helmExec, _ := exec.LookPath("helm")
+	helmExec, lookErr := exec.LookPath("helm")
 	tests := []struct {
 		env  map[string]string
 		name string
@@ -26,14 +32,17 @@ func Test_helmExecutable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "fallback to default" && lookErr != nil {
+				// helmExecutable() falls through to log.Fatalf when helm is
+				// not on PATH, which would kill the whole test binary - skip
+				// rather than exercise that path here.
+				t.Skip("helm not found on PATH")
+			}
 			for k, v := range tt.env {
-				_ = os.Setenv(k, v)
+				t.Setenv(k, v)
 			}
 			if got := helmExecutable(); got != tt.want {
 				t.Errorf("helmExecutable() = %v, want %v", got, tt.want)
-			}
-			for k, _ := range tt.env {
-				_ = os.Unsetenv(k)
 			}
 		})
 	}
@@ -87,5 +96,187 @@ func Test_stripHelmBanner(t *testing.T) {
 				t.Errorf("stripHelmBanner() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGetValuesArgs(t *testing.T) {
+	workDir := t.TempDir()
+
+	t.Run("no values", func(t *testing.T) {
+		args, err := getValuesArgs(&types.HelmChart{}, workDir)
+		if err != nil {
+			t.Fatalf("getValuesArgs() error = %v", err)
+		}
+		if len(args) != 0 {
+			t.Errorf("args = %v, want none", args)
+		}
+	})
+
+	t.Run("values file is joined with the work dir", func(t *testing.T) {
+		args, err := getValuesArgs(&types.HelmChart{ValuesFile: "values.yaml"}, workDir)
+		if err != nil {
+			t.Fatalf("getValuesArgs() error = %v", err)
+		}
+		want := []string{"--values", filepath.Join(workDir, "values.yaml")}
+		if !reflect.DeepEqual(args, want) {
+			t.Errorf("args = %v, want %v", args, want)
+		}
+	})
+
+	t.Run("inline values are written to a file", func(t *testing.T) {
+		chart := &types.HelmChart{
+			ReleaseName:  "rel",
+			ValuesInline: map[string]any{"replicaCount": 2},
+		}
+		args, err := getValuesArgs(chart, workDir)
+		if err != nil {
+			t.Fatalf("getValuesArgs() error = %v", err)
+		}
+		if len(args) != 2 || args[0] != "--values" {
+			t.Fatalf("args = %v, want a --values pair", args)
+		}
+		content, err := os.ReadFile(args[1])
+		if err != nil {
+			t.Fatalf("reading the generated values file: %v", err)
+		}
+		if !strings.Contains(string(content), "replicaCount: 2") {
+			t.Errorf("generated values = %q, want it to contain replicaCount: 2", content)
+		}
+	})
+
+	t.Run("both sources produce two --values in order", func(t *testing.T) {
+		chart := &types.HelmChart{
+			ReleaseName:  "rel",
+			ValuesFile:   "values.yaml",
+			ValuesInline: map[string]any{"a": 1},
+		}
+		args, err := getValuesArgs(chart, workDir)
+		if err != nil {
+			t.Fatalf("getValuesArgs() error = %v", err)
+		}
+		if len(args) != 4 || args[0] != "--values" || args[2] != "--values" {
+			t.Fatalf("args = %v, want two --values pairs", args)
+		}
+		if args[1] != filepath.Join(workDir, "values.yaml") {
+			t.Errorf("the values file must come first, got %v", args)
+		}
+	})
+}
+
+func TestTemplateHelmCharts_InvocationPerBackend(t *testing.T) {
+	tests := []struct {
+		name  string
+		chart types.HelmChart
+		want  []string
+	}{
+		{
+			name: "oci backend passes the repo url positionally",
+			chart: types.HelmChart{
+				Name: "app", RepoUrl: "oci://reg.example.com/helm/app",
+				ReleaseName: "rel", Version: "1.2.3", Namespace: "ns",
+				IgnoreCredentials: true,
+			},
+			want: []string{"template", "rel", "--include-crds", "--version", "1.2.3", "--namespace", "ns", "oci://reg.example.com/helm/app"},
+		},
+		{
+			name: "http backend passes --repo and the chart name",
+			chart: types.HelmChart{
+				Name: "app", RepoUrl: "https://charts.example.com",
+				ReleaseName: "rel", Version: "1.2.3", Namespace: "ns",
+				IgnoreCredentials: true,
+			},
+			want: []string{"template", "rel", "--include-crds", "--version", "1.2.3", "--namespace", "ns", "--repo", "https://charts.example.com", "--release-name", "app"},
+		},
+		{
+			name: "version and namespace are omitted when unset",
+			chart: types.HelmChart{
+				Name: "app", RepoUrl: "oci://reg.example.com/helm/app",
+				ReleaseName: "rel", IgnoreCredentials: true,
+			},
+			want: []string{"template", "rel", "--include-crds", "oci://reg.example.com/helm/app"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotArgs []string
+			original := runCommand
+			t.Cleanup(func() { runCommand = original })
+			runCommand = func(name string, arg ...string) (string, string, error) {
+				gotArgs = arg
+				return "---\nkind: ConfigMap\n", "", nil
+			}
+
+			charts := []types.HelmChart{tt.chart}
+			out, err := TemplateHelmCharts(&types.Helm{Charts: &charts}, t.TempDir())
+			if err != nil {
+				t.Fatalf("TemplateHelmCharts() error = %v", err)
+			}
+			if out != "---\nkind: ConfigMap\n" {
+				t.Errorf("output = %q, want the helm output unchanged", out)
+			}
+			if !reflect.DeepEqual(gotArgs, tt.want) {
+				t.Errorf("args =\n  %v\nwant\n  %v", gotArgs, tt.want)
+			}
+		})
+	}
+}
+
+func TestTemplateHelmCharts_ConcatenatesInDeclarationOrder(t *testing.T) {
+	calls := 0
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		calls++
+		return fmt.Sprintf("---\nkind: Chart%d\n", calls), "", nil
+	}
+
+	charts := []types.HelmChart{
+		{Name: "a", RepoUrl: "oci://reg.example.com/a", ReleaseName: "a", IgnoreCredentials: true},
+		{Name: "b", RepoUrl: "oci://reg.example.com/b", ReleaseName: "b", IgnoreCredentials: true},
+	}
+	out, err := TemplateHelmCharts(&types.Helm{Charts: &charts}, t.TempDir())
+	if err != nil {
+		t.Fatalf("TemplateHelmCharts() error = %v", err)
+	}
+	want := "---\nkind: Chart1\n---\nkind: Chart2\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+}
+
+func TestTemplateHelmCharts_PropagatesFailure(t *testing.T) {
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		return "", "chart not found", errors.New("exit status 1")
+	}
+
+	charts := []types.HelmChart{{Name: "a", RepoUrl: "oci://reg.example.com/a", ReleaseName: "a", IgnoreCredentials: true}}
+	_, err := TemplateHelmCharts(&types.Helm{Charts: &charts}, t.TempDir())
+	if err == nil {
+		t.Fatal("TemplateHelmCharts() error = nil, want the helm failure to propagate")
+	}
+	if !strings.Contains(err.Error(), "chart not found") {
+		t.Errorf("error = %v, want it to carry helm's stderr", err)
+	}
+}
+
+func TestTemplateHelmCharts_StripsBannerBeforeConcatenating(t *testing.T) {
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		return "Pulled: reg/app:1\nDigest: sha256:abc\n---\nkind: ConfigMap\n", "", nil
+	}
+
+	charts := []types.HelmChart{
+		{Name: "a", RepoUrl: "oci://reg.example.com/a", ReleaseName: "a", IgnoreCredentials: true},
+		{Name: "b", RepoUrl: "oci://reg.example.com/b", ReleaseName: "b", IgnoreCredentials: true},
+	}
+	out, err := TemplateHelmCharts(&types.Helm{Charts: &charts}, t.TempDir())
+	if err != nil {
+		t.Fatalf("TemplateHelmCharts() error = %v", err)
+	}
+	if strings.Contains(out, "Pulled:") || strings.Contains(out, "Digest:") {
+		t.Errorf("banner survived concatenation: %q", out)
 	}
 }

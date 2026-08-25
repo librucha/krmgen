@@ -143,7 +143,7 @@ jen rozhraní.
 | # | Fáze | Výstup | Brána |
 |---|---|---|---|
 | 1 | Specifikace kontraktu | spec + JSON Schema | odsouhlasená |
-| 2 | Golden-master + unit testy | testovací síť | goldeny zelené, pokrytí ~80 % |
+| 2 | Golden-master + unit testy | testovací síť | **hotovo 2026-08-25**: 8 scénářů, pokrytí 71,4 % (viz níže) |
 | 3 | Knihovna šablon ven | `cloud-go-templates` v1 | goldeny beze změny |
 | 4 | kustomize → krusty | `Builder` + 2 impl. | goldeny beze změny nebo schválený diff |
 | 5 | helm → SDK | `Renderer` + 2 impl. | naměřená parita → rozhodnutí jít/nejít |
@@ -161,6 +161,29 @@ Fáze 5 je jediná s reálnou možností „ne". Rozhodne se podle naměřené p
 - **Matice podporovaných verzí** externích nástrojů + detekce verze při startu
 - **Dokumentované výjimky z parity** mezi backendy
 - **Ne-cíle**
+
+### Fáze 2 — výsledek
+
+Dokončeno 2026-08-25, 14 commitů. Pokrytí **36,9 % → 71,4 %**, 8 golden scénářů
+(helm sám, kustomize sám, oba, skip patterns, šablonovací funkce, dvě kustomizace,
+nepodporované schéma repozitáře, OCI za build tagem `oci`).
+
+Tři věci, které se během fáze ukázaly jinak, než designový dokument předpokládal:
+
+- **Hermetické fixtures z lokálního chartu nejdou.** `newGenerator` přijímá jen `oci://`
+  a `http(s)://`, takže chart z adresáře krmgenu nepředáš. Náhrada je lokální HTTP chart
+  repozitář z `httptest`; adresa se do fixture dostane přes `argocdEnv "CHART_REPO"`.
+- **OCI hermeticky nejde vůbec.** Helm chce pro HTTP registry `--plain-http`, pro
+  self-signed `--insecure-skip-tls-verify`, a krmgen nepředává ani jedno. OCI proto zůstává
+  na síťovém testu za build tagem, bez goldenu.
+- **Goldeny jsou verzně ukotvené.** Výstup se mezi helmem 3 a 4 liší (prázdný řádek před
+  `---`), takže goldeny platí pro jednu referenční dvojici nástrojů, zapsanou
+  v `test/golden/versions_test.go`, a harness verzi kontroluje před porovnáním. Matice
+  podpory 3.8+/4.x tím není dotčená — popisuje, co krmgen podporuje, ne proti čemu vznikly
+  artefakty.
+
+CI bylo od května 2026 červené (`make build` bez `Makefile`) a nespouštělo se na pull
+requestech. Obojí opraveno; bez toho by síť nehlídala nic.
 
 ### Fáze 2 — testovací strategie
 
@@ -222,6 +245,13 @@ Spec rozhodne, která strana se přizpůsobí. U `azUaIdClientId` je k úvaze p�
 | Banner z Helmu v4 na stdout | strip zůstává natrvalo pro externí cestu |
 
 ## 7. Otevřené otázky
+
+Před fází 3 (z fáze 2):
+
+A. Zůstane `test/golden` jako umístění scénářů, nebo se sloučí s `test/resources`?
+B. Balit demo chart za běhu testu (dnešní volba, vyžaduje helm i pro jednotkový běh),
+   nebo commitnout hotový tarball?
+
 
 1. ~~Potvrdit cestu modulu (R4)~~ — **vyřešeno 2026-08-21**, viz R4
 2. ~~Rozsah matice podporovaných verzí~~ — **vyřešeno 2026-08-21**: spodní hranice je
