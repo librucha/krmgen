@@ -114,6 +114,18 @@ func runScenario(t *testing.T, name string) result {
 	return result{stdout: stdout.String(), stderr: stderr.String(), exitCode: exitCodeOf(t, err)}
 }
 
+// runBinary runs krmgen with arbitrary arguments and no fixture.
+func runBinary(t *testing.T, args ...string) result {
+	t.Helper()
+	cmd := exec.Command(binaryPath(t), args...)
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	return result{stdout: stdout.String(), stderr: stderr.String(), exitCode: exitCodeOf(t, err)}
+}
+
 // exitCodeOf turns cmd.Run's error into an exit code, failing the test on
 // anything that is not a clean non-zero exit (a missing binary, for instance).
 func exitCodeOf(t *testing.T, err error) int {
