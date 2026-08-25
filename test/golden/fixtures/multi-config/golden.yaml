@@ -1,0 +1,94 @@
+---
+# Source: demo/crds/demo-crd.yaml
+# Present so that --include-crds is observable in the goldens.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: demos.krmgen.test
+spec:
+  group: krmgen.test
+  scope: Namespaced
+  names:
+    plural: demos
+    singular: demo
+    kind: Demo
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+
+---
+# Source: demo/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-a-demo
+  namespace: alpha
+data:
+  message: "hello"
+  replicas: "1"
+
+---
+# Source: demo/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-a-demo
+  namespace: alpha
+spec:
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: rel-a-demo
+
+---
+# Source: demo/crds/demo-crd.yaml
+# Present so that --include-crds is observable in the goldens.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: demos.krmgen.test
+spec:
+  group: krmgen.test
+  scope: Namespaced
+  names:
+    plural: demos
+    singular: demo
+    kind: Demo
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+
+---
+# Source: demo/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-b-demo
+  namespace: beta
+data:
+  message: "hello"
+  replicas: "1"
+
+---
+# Source: demo/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-b-demo
+  namespace: beta
+spec:
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: rel-b-demo
+
