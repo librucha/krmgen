@@ -135,10 +135,9 @@ func TestEvalGoTemplates_RegistersEveryDocumentedFunction(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// A template that only references the function without calling it
 			// parses if and only if the function is registered.
-			if _, err := EvalGoTemplates("{{ if false }}{{ " + name + " }}{{ end }}"); err != nil {
-				if strings.Contains(err.Error(), "function \""+name+"\" not defined") {
-					t.Errorf("template function %q is not registered", name)
-				}
+			_, err := EvalGoTemplates("{{ if false }}{{ " + name + " }}{{ end }}")
+			if err != nil && strings.Contains(err.Error(), "function \""+name+"\" not defined") {
+				t.Errorf("template function %q is not registered", name)
 			}
 		})
 	}

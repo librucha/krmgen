@@ -310,23 +310,38 @@ process environment. Use `argocdEnv` or `kubeEnv` instead.
 
 Caching is the library's responsibility, not krmgen's. Each `azure.Provider`
 (one per krmgen process — see `internal/template/template.go`, built once
-behind a `sync.Once`) owns an in-memory cache, a plain map guarded by a mutex.
-The cache key is always built from the calling function's own arguments,
-never from the resource ID Azure returns. Entries live for the lifetime of
-the provider — i.e. for the whole `krmgen generate` run — and are never
-invalidated or evicted during that run; nothing persists between runs. The
-provider, and therefore the cache, is safe for concurrent use: building a
-client or resolving a lookup for one key never blocks a different key, and
-concurrent calls for the *same* key wait for and share the one in-flight
-result.
+behind a `sync.Once`) owns an in-memory cache, a plain map guarded by a mutex
+(`azure/cache.go`). The cache key is always built from the calling function's
+own arguments, never from the resource ID Azure returns. Entries live for the
+lifetime of the provider — i.e. for the whole `krmgen generate` run — and are
+never invalidated or evicted during that run; nothing persists between runs.
 
-Two references to the same resource with the same arguments cause one
-network call. Because the key is built from arguments rather than from the
-resolved resource ID, a version-less reference and an explicit-version
-reference to the same underlying secret, certificate or key are two separate
-cache entries (and therefore two network calls) unless the library's own
-per-function logic folds them together — see the library's `azure` package
-for the exact per-function key shapes.
+Azure **clients** are deduplicated per key: `Provider.client` stores one
+`*clientEntry` behind its own `sync.Once` for each client kind
+(`azure/provider.go`), so two goroutines building, say, the secrets client for
+the same vault wait for and share that one build, while building clients for
+different vaults or kinds never blocks across keys. The **cache** gives no
+equivalent guarantee for network calls. `cache.get` and `cache.put` are two
+independent, briefly mutex-guarded map operations (`azure/cache.go`); every
+cached function (e.g. `Secret` in `azure/secrets.go`, and equivalently
+`certificate`, `key`, `StorageKeyFunc`, `UserIdentityClientIDFunc`) calls
+`cache.get`, and on a miss performs the actual Azure network call **outside
+any lock**, only calling `cache.put` once the response comes back. There is
+no in-flight request deduplication (no singleflight): two goroutines racing
+on the same uncached key each pass the miss check and each issue their own
+network call; both then write the same value back under the same key. That
+is redundant traffic, not a correctness problem, but it is not "one network
+call" — a false guarantee here would matter to whoever measures or reimplements
+this behaviour later.
+
+A single caller making two *sequential* references to the same resource with
+the same arguments causes one network call: the second finds the entry the
+first call's `put` left behind. Because the key is built from arguments
+rather than from the resolved resource ID, a version-less reference and an
+explicit-version reference to the same underlying secret, certificate or key
+are two separate cache entries (and therefore two network calls, even made
+sequentially) unless the library's own per-function logic folds them together
+— see the library's `azure` package for the exact per-function key shapes.
 
 ### Naming note
 
