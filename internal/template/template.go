@@ -1,22 +1,40 @@
 package template
 
 import (
+	"context"
+	"strings"
+	"sync"
+	"text/template"
+
 	"github.com/Masterminds/goutils"
 	"github.com/Masterminds/sprig/v3"
+	"github.com/librucha/cloud-go-templates/azure"
 	"github.com/librucha/krmgen/internal/template/argocd"
-	azcert "github.com/librucha/krmgen/internal/template/azure/cert"
-	azid "github.com/librucha/krmgen/internal/template/azure/identity"
-	azkey "github.com/librucha/krmgen/internal/template/azure/key"
-	azsec "github.com/librucha/krmgen/internal/template/azure/sec"
-	azstorage "github.com/librucha/krmgen/internal/template/azure/storage"
 	"github.com/librucha/krmgen/internal/template/files"
 	"github.com/librucha/krmgen/internal/template/krmgen"
 	"github.com/librucha/krmgen/internal/template/kube"
-	"strings"
-	"text/template"
 )
 
-func initFuncs(t *template.Template) {
+// The provider is built once per process, not once per template. Templates are
+// evaluated file by file, and a provider per file would give each file its own
+// cache - turning one Azure lookup into one per file that mentions the secret.
+var (
+	azureOnce     sync.Once
+	azureProvider *azure.Provider
+	azureErr      error
+)
+
+func azureFuncs() (template.FuncMap, error) {
+	azureOnce.Do(func() {
+		azureProvider, azureErr = azure.New(context.Background())
+	})
+	if azureErr != nil {
+		return nil, azureErr
+	}
+	return azureProvider.FuncMap(), nil
+}
+
+func initFuncs(t *template.Template) error {
 	funcs := sprig.FuncMap()
 	// Deleted for security reasons
 	delete(funcs, "env")
@@ -26,19 +44,17 @@ func initFuncs(t *template.Template) {
 	funcs[krmgen.VersionFunc] = krmgen.ResolveKrmgenVersion
 	funcs[krmgen.GeneratedFunc] = krmgen.ResolveKrmgenGenerated
 
-	// Add Azure key vault secrets
-	funcs[azsec.SecFunc] = azsec.GetSecret
-	funcs[azsec.ToPemFunc] = azsec.ToPemBlock
-	funcs[azsec.PfxKeyFunc] = azsec.GetPfxKey
-	funcs[azsec.PfxCrtFunc] = azsec.GetPfxCert
-	// Add Azure key vault certificates
-	funcs[azcert.CertFunc] = azcert.ResolveCert
-	// Add Azure key vault keys
-	funcs[azkey.KeyFunc] = azkey.ResolveKey
-	// Add Azure storage key
-	funcs[azstorage.StoreKeyFunc] = azstorage.GetStoreKey
-	// Add Azure Identity
-	funcs[azid.ClientIdFunc] = azid.GetClientId
+	// Add Azure functions from cloud-go-templates
+	azFuncs, err := azureFuncs()
+	if err != nil {
+		return err
+	}
+	for name, fn := range azFuncs {
+		funcs[name] = fn
+	}
+	// Deprecated alias: azUaIdClientId was this function's name before it moved
+	// to the library. Kept so existing krmgen.yaml files keep working.
+	funcs["azUaIdClientId"] = funcs["azUserIdentityClientId"]
 
 	// Add ArgoCD env function
 	funcs[argocd.EnvFunc] = argocd.ResolveArgocdEnv
@@ -50,6 +66,7 @@ func initFuncs(t *template.Template) {
 	funcs[files.ReadFileFunc] = files.ReadFile
 
 	t.Funcs(funcs)
+	return nil
 }
 
 func EvalGoTemplates(content string) (string, error) {
@@ -57,7 +74,9 @@ func EvalGoTemplates(content string) (string, error) {
 		return content, nil
 	}
 	t := template.New("krmgen")
-	initFuncs(t)
+	if err := initFuncs(t); err != nil {
+		return "", err
+	}
 	tmpl, err := t.Parse(content)
 	if err != nil {
 		return "", err
