@@ -35,13 +35,9 @@ internal/
     kube/               → kubeEnv func (KUBE_* env vars)
     files/              → readF func (read local relative file)
     krmgen/             → krmgenVer, krmgenGenerated funcs
-    azure/
-      sec/              → azSec, toPem, azPfxKey, azPfxCrt (Key Vault secrets + PKCS12)
-      cert/             → azCert (Key Vault certificates)
-      key/              → azKey (Key Vault keys)
-      storage/          → azStoreKey (Storage account key)
-      identity/         → azUaIdClientId (Managed Identity client ID)
-      commons/          → shared subscription helpers
+    (Azure functions — azSec, toPem, azPfxKey, azPfxCrt, azCert, azKey,
+     azStoreKey, azUserIdentityClientId — come from the
+     github.com/librucha/cloud-go-templates dependency, not from this repo)
   tool/tool.go          → RunCommand wrapper for external binaries
   utils/constants.go    → env var name constants
 
@@ -63,7 +59,8 @@ docs/specification.md   → product contract: what krmgen accepts, produces, gua
 | `azCert <vault> <cert> [version]` | Azure Key Vault certificate (PEM) |
 | `azKey <vault> <key> [version]` | RSA modulus, PEM-encoded under a `"... PRIVATE KEY"` header — not actually a private key, see specification |
 | `azStoreKey <subscription> <resourceGroup> <account>` | Azure Storage account key |
-| `azUaIdClientId <resourceGroup> <name>` | Azure Managed Identity client ID |
+| `azUserIdentityClientId <resourceGroup> <name>` | Azure Managed Identity client ID |
+| `azUaIdClientId <resourceGroup> <name>` | Deprecated alias for `azUserIdentityClientId`, kept for backward compatibility |
 | `argocdEnv <key> [default]` | Read `ARGOCD_ENV_<key>` / `ARGOCD_APP_<key>` |
 | `kubeEnv <key> [default]` | Read `KUBE_<key>` env var |
 | `readF <relpath> [default]` | Read local file relative to krmgen's process working directory (not the source dir) |
@@ -133,11 +130,13 @@ Required external tools: `helm`, `kubectl` (both must be in PATH or configured v
 
 - All comments in English
 - No validation schema wired (commented out in `parser.go`) — can be enabled
-- Azure clients and results are cached in-memory per process run. Every cache
-  keys off a locally constructed ID built from the function's arguments, never
-  off the resource ID Azure returns — see
+- Azure functions come from the `github.com/librucha/cloud-go-templates`
+  library, not from this repo. The library's provider caches clients and
+  results in memory, keyed on the call's own arguments (never on the resource
+  ID Azure returns), for the lifetime of the provider; it is safe for
+  concurrent use. See
   [`docs/specification.md`](docs/specification.md#4-template-functions),
-  Caching, for the per-function keys
+  Caching, for details
 - `log.Fatal` used throughout (process exits on any error — intentional for a CLI tool)
 
 ## Specification

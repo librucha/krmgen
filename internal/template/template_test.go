@@ -2,6 +2,7 @@ package template
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/librucha/krmgen/internal/template/argocd"
@@ -111,5 +112,48 @@ func Test_EvalGoTemplates(t *testing.T) {
 				t.Errorf("EvalGoTemplates() got = %s, want %s", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestEvalGoTemplates_RegistersEveryDocumentedFunction is the actual regression
+// safety net for the phase 3 library extraction: the golden suite does not
+// exercise Azure functions at all, so a botched rewiring (a dropped function,
+// a rename, a lost deprecated alias) would otherwise pass unnoticed.
+func TestEvalGoTemplates_RegistersEveryDocumentedFunction(t *testing.T) {
+	// Every name docs/specification.md section 4 documents, plus the
+	// deprecated alias krmgen keeps for backward compatibility.
+	names := []string{
+		"krmgenVer", "krmgenGenerated",
+		"argocdEnv", "kubeEnv", "readF",
+		"azSec", "toPem", "azPfxKey", "azPfxCrt",
+		"azCert", "azKey", "azStoreKey", "azUserIdentityClientId",
+		"azUaIdClientId",
+		// a sprig function, to prove sprig is still merged in
+		"upper",
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			// A template that only references the function without calling it
+			// parses if and only if the function is registered.
+			if _, err := EvalGoTemplates("{{ if false }}{{ " + name + " }}{{ end }}"); err != nil {
+				if strings.Contains(err.Error(), "function \""+name+"\" not defined") {
+					t.Errorf("template function %q is not registered", name)
+				}
+			}
+		})
+	}
+}
+
+// TestEvalGoTemplates_DoesNotRegisterEnvFunctions guards the security
+// deletion in initFuncs: sprig's env and expandenv must never be reachable
+// from a template.
+func TestEvalGoTemplates_DoesNotRegisterEnvFunctions(t *testing.T) {
+	// sprig's env and expandenv are removed deliberately: templates must not
+	// read arbitrary process environment.
+	for _, name := range []string{"env", "expandenv"} {
+		_, err := EvalGoTemplates("{{ if false }}{{ " + name + " \"X\" }}{{ end }}")
+		if err == nil || !strings.Contains(err.Error(), "not defined") {
+			t.Errorf("%q must not be registered, got err = %v", name, err)
+		}
 	}
 }

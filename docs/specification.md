@@ -260,6 +260,11 @@ coincide there.
 
 ### Azure
 
+These functions are provided by the `github.com/librucha/cloud-go-templates`
+library (package `azure`), not by code in this repository. krmgen depends on
+the library and merges its `Provider.FuncMap()` into the template function set
+at `internal/template/template.go`.
+
 | Function | Arity | Returns |
 |---|---|---|
 | `azSec <vault> <secret> [version]` | 2–3 | Key Vault secret value |
@@ -268,18 +273,21 @@ coincide there.
 | `azPfxKey <vault> <secret> [version]` | 2–3 | Private key extracted from a PKCS12 secret |
 | `azPfxCrt <vault> <secret> [version]` | 2–3 | Certificate chain extracted from a PKCS12 secret |
 | `azStoreKey <subscription> <resourceGroup> <account>` | 3 | Storage account key |
-| `azUaIdClientId <resourceGroup> <name>` | 2 | Client ID of a user-assigned managed identity |
+| `azUserIdentityClientId <resourceGroup> <name>` | 2 | Client ID of a user-assigned managed identity |
 | `toPem <type> <data>` | 2 | Wraps bytes in a PEM block |
 
-**`azKey` does not return a private key, despite the PEM header.** `wrapKey`
-(`internal/template/azure/key/azure-key-provider.go:84-90`) builds the PEM
-block from `key.Key.N` — the RSA **modulus**, which Key Vault's `GetKey`
-response always includes and which is public information — under a header of
-`fmt.Sprintf("%s PRIVATE KEY", *key.Key.Kty)` (e.g. `RSA PRIVATE KEY` for an
-RSA key). The emitted PEM is therefore a public value wearing a private-key
-label; it is not usable as a private key and does not contain one. A future
-reimplementation must reproduce this exact (mislabeled) output, not what the
-header claims.
+`azUaIdClientId` remains registered as a deprecated alias of
+`azUserIdentityClientId` — see Naming note below. It is krmgen's own alias,
+registered in `internal/template/template.go`, not something the library
+exposes.
+
+**`azKey` does not return a private key, despite the PEM header.** The
+library's key provider builds the PEM block from the RSA **modulus**, which
+Key Vault's `GetKey` response always includes and which is public
+information, under a header of `"<KTY> PRIVATE KEY"` (e.g. `RSA PRIVATE KEY`
+for an RSA key). The emitted PEM is therefore a public value wearing a
+private-key label; it is not usable as a private key and does not contain
+one. This behaviour is unchanged by the move to the library.
 
 `azPfxKey` and `azPfxCrt` forward their arguments to the same secret lookup as
 `azSec` before extracting the key or certificate, so they accept the same
@@ -300,44 +308,35 @@ process environment. Use `argocdEnv` or `kubeEnv` instead.
 
 ### Caching
 
-Five Azure provider functions each keep an in-memory, per-process cache
-(a plain `map`), across six lookup paths in total — `azSec` has two, one for an
-explicit version and one without. Two references to the same resource cause one
-network call; the cache is never invalidated during a run, and it does not
-persist between runs.
+Caching is the library's responsibility, not krmgen's. Each `azure.Provider`
+(one per krmgen process — see `internal/template/template.go`, built once
+behind a `sync.Once`) owns an in-memory cache, a plain map guarded by a mutex.
+The cache key is always built from the calling function's own arguments,
+never from the resource ID Azure returns. Entries live for the lifetime of
+the provider — i.e. for the whole `krmgen generate` run — and are never
+invalidated or evicted during that run; nothing persists between runs. The
+provider, and therefore the cache, is safe for concurrent use: building a
+client or resolving a lookup for one key never blocks a different key, and
+concurrent calls for the *same* key wait for and share the one in-flight
+result.
 
-Every path keys the cache by a locally constructed ID, and saves the fetched
-result under that same ID:
-
-| Function | Cache key |
-|---|---|
-| `azSec` (explicit version) | `<vaultUrl>/<name>/<version>` |
-| `azSec` (no version) | `<vaultUrl>/<name>/` and the resolved `<vaultUrl>/<name>/<version>` |
-| `azCert` | `<vaultUrl>/<name>/<version>` |
-| `azKey` | `<vaultUrl>/<name>/<version>` |
-| `azStoreKey` | `<subscriptionID>/<resourceGroup>/<account>` |
-| `azUaIdClientId` | `<resourceGroup>/<name>` |
-
-`azSec` without a version stores the result twice: under the no-version key, so
-a later version-less reference skips the version listing entirely, and under the
-resolved version's key, so a later reference that names that version hits the
-same entry.
-
-Because the key is built from the arguments rather than from the resource ID
-Azure returns, a reference that omits the version and one that names the same
-version resolve to the same entry only for `azSec`. For `azCert` and `azKey`,
-a version-less reference and an explicit-version reference to the same
-underlying resource are two separate cache entries, and therefore two
-network calls.
+Two references to the same resource with the same arguments cause one
+network call. Because the key is built from arguments rather than from the
+resolved resource ID, a version-less reference and an explicit-version
+reference to the same underlying secret, certificate or key are two separate
+cache entries (and therefore two network calls) unless the library's own
+per-function logic folds them together — see the library's `azure` package
+for the exact per-function key shapes.
 
 ### Naming note
 
-`azUaIdClientId` reads as an abbreviation nobody can expand on sight. It is
-renamed to **`azUserIdentityClientId`** in phase 3, where the function moves to
-the `cloud-go-templates` library and a rename ships with the new module.
-krmgen keeps `azUaIdClientId` registered as a deprecated alias of the same
-function, so existing configurations continue to work; the library itself
-exposes only the new name.
+`azUaIdClientId` read as an abbreviation nobody could expand on sight. It was
+renamed to **`azUserIdentityClientId`** in phase 3 (2026-08-25), when the
+function moved to the `cloud-go-templates` library and the rename shipped
+with the new module. krmgen keeps `azUaIdClientId` registered as a deprecated
+alias of the same function (`internal/template/template.go`), so existing
+configurations continue to work; the library itself exposes only the new
+name.
 
 The name is deliberately explicit about *user*-assigned, because Azure's two
 managed-identity kinds cannot share one function. Both expose the same three
