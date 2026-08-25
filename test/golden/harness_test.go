@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files with the current output")
@@ -90,9 +93,27 @@ type result struct {
 	exitCode int
 }
 
+// minimalEnv returns the smallest environment a subprocess needs to find its
+// tools and write temp files: PATH, HOME and TMPDIR (the latter only if set;
+// most platforms default it internally). Anything else - KUBE_*, ARGOCD_*,
+// KRMGEN_HELM_* and the like - must be passed explicitly by the caller so an
+// ambient variable on the host or CI runner can never silently change a
+// golden's output. See docs/specification.md for the environment variables
+// krmgen itself reads.
+func minimalEnv() []string {
+	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
+	if tmp, ok := os.LookupEnv("TMPDIR"); ok {
+		env = append(env, "TMPDIR="+tmp)
+	}
+	return env
+}
+
 // runScenario copies the fixture to a temp directory, points it at a local
-// chart repository, and runs krmgen against it.
-func runScenario(t *testing.T, name string) result {
+// chart repository, and runs krmgen against it. extraEnv carries any
+// scenario-specific variables (e.g. ARGOCD_ENV_MESSAGE) as "KEY=VALUE"
+// entries - the child process gets exactly PATH/HOME/TMPDIR, the chart repo
+// URL, and these, never the ambient environment.
+func runScenario(t *testing.T, name string, extraEnv ...string) result {
 	t.Helper()
 
 	fixture := filepath.Join("fixtures", name)
@@ -104,7 +125,8 @@ func runScenario(t *testing.T, name string) result {
 	_ = os.Remove(filepath.Join(workDir, "golden.yaml"))
 
 	cmd := exec.Command(binaryPath(t), "generate", workDir)
-	cmd.Env = append(os.Environ(), "ARGOCD_ENV_CHART_REPO="+chartRepo(t))
+	cmd.Env = append(minimalEnv(), "ARGOCD_ENV_CHART_REPO="+chartRepo(t))
+	cmd.Env = append(cmd.Env, extraEnv...)
 
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -114,10 +136,12 @@ func runScenario(t *testing.T, name string) result {
 	return result{stdout: stdout.String(), stderr: stderr.String(), exitCode: exitCodeOf(t, err)}
 }
 
-// runBinary runs krmgen with arbitrary arguments and no fixture.
+// runBinary runs krmgen with arbitrary arguments and no fixture, using the
+// same minimal, explicit environment as runScenario.
 func runBinary(t *testing.T, args ...string) result {
 	t.Helper()
 	cmd := exec.Command(binaryPath(t), args...)
+	cmd.Env = minimalEnv()
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -145,6 +169,7 @@ func exitCodeOf(t *testing.T, err error) int {
 // whether that was intended before regenerating.
 func assertGolden(t *testing.T, name string, got string) {
 	t.Helper()
+	checkToolVersions(t)
 	path := filepath.Join("fixtures", name, "golden.yaml")
 
 	if *update {
@@ -164,20 +189,46 @@ func assertGolden(t *testing.T, name string, got string) {
 	}
 }
 
+// diff produces a line-based diff of want vs got using an LCS backtrace, so
+// a single inserted or deleted line is reported as exactly that - one "+" or
+// "-" line - instead of an index-by-index comparison cascading into a bogus
+// mismatch on every line that follows it.
 func diff(want, got string) string {
 	wantLines := strings.Split(want, "\n")
 	gotLines := strings.Split(got, "\n")
+	n, m := len(wantLines), len(gotLines)
+
+	// lcs[i][j] holds the length of the longest common subsequence of
+	// wantLines[i:] and gotLines[j:].
+	lcs := make([][]int, n+1)
+	for i := range lcs {
+		lcs[i] = make([]int, m+1)
+	}
+	for i := n - 1; i >= 0; i-- {
+		for j := m - 1; j >= 0; j-- {
+			if wantLines[i] == gotLines[j] {
+				lcs[i][j] = lcs[i+1][j+1] + 1
+			} else if lcs[i+1][j] >= lcs[i][j+1] {
+				lcs[i][j] = lcs[i+1][j]
+			} else {
+				lcs[i][j] = lcs[i][j+1]
+			}
+		}
+	}
+
 	var b strings.Builder
-	for i := 0; i < len(wantLines) || i < len(gotLines); i++ {
-		var w, g string
-		if i < len(wantLines) {
-			w = wantLines[i]
-		}
-		if i < len(gotLines) {
-			g = gotLines[i]
-		}
-		if w != g {
-			fmt.Fprintf(&b, "line %d:\n  want: %q\n  got:  %q\n", i+1, w, g)
+	i, j := 0, 0
+	for i < n || j < m {
+		switch {
+		case i < n && j < m && wantLines[i] == gotLines[j]:
+			i++
+			j++
+		case j < m && (i == n || lcs[i][j+1] >= lcs[i+1][j]):
+			fmt.Fprintf(&b, "+ got  line %d: %q\n", j+1, gotLines[j])
+			j++
+		default:
+			fmt.Fprintf(&b, "- want line %d: %q\n", i+1, wantLines[i])
+			i++
 		}
 	}
 	return b.String()
@@ -219,8 +270,11 @@ func TestGolden_SkipPatterns(t *testing.T) {
 }
 
 func TestGolden_TemplateFunctions(t *testing.T) {
-	t.Setenv("ARGOCD_ENV_MESSAGE", "from-env")
-	res := runScenario(t, "template-functions")
+	// Passed explicitly rather than via t.Setenv: the harness gives the
+	// subprocess a minimal, explicit environment (see minimalEnv) and does
+	// not inherit the test binary's own env, so t.Setenv here would never
+	// reach the child.
+	res := runScenario(t, "template-functions", "ARGOCD_ENV_MESSAGE=from-env")
 	if res.exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
 	}
@@ -233,11 +287,39 @@ func TestGolden_TemplateFunctions(t *testing.T) {
 	}
 }
 
+// TestGolden_StdoutCarriesOnlyYaml asserts that stdout, in its entirety,
+// decodes as a stream of YAML documents. Log lines (from logrus or the
+// standard library) go to stderr, never stdout, so a substring check for
+// "level=" / "time=" prefixes can never fail - it does not test what its
+// name promises. Decoding is the real assertion: it fails on any malformed
+// document and on empty output (a decoder that reports zero documents),
+// closing the degenerate-output hole the substring check missed.
 func TestGolden_StdoutCarriesOnlyYaml(t *testing.T) {
 	res := runScenario(t, "helm-with-kustomize")
-	for i, line := range strings.Split(strings.TrimSpace(res.stdout), "\n") {
-		if strings.HasPrefix(line, "level=") || strings.HasPrefix(line, "time=") {
-			t.Errorf("line %d on stdout is a log line, not YAML: %q", i+1, line)
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertOnlyYaml(t, res.stdout)
+}
+
+// assertOnlyYaml decodes stdout as a stream of YAML documents, requiring
+// every document to parse and at least one document to be present.
+func assertOnlyYaml(t *testing.T, stdout string) {
+	t.Helper()
+	dec := yaml.NewDecoder(strings.NewReader(stdout))
+	count := 0
+	for {
+		var doc any
+		err := dec.Decode(&doc)
+		if errors.Is(err, io.EOF) {
+			break
 		}
+		if err != nil {
+			t.Fatalf("stdout document %d does not parse as YAML: %v\nstdout:\n%s", count+1, err, stdout)
+		}
+		count++
+	}
+	if count == 0 {
+		t.Fatalf("stdout contained no YAML documents\nstdout:\n%s", stdout)
 	}
 }

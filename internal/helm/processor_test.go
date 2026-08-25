@@ -14,7 +14,7 @@ import (
 )
 
 func Test_helmExecutable(t *testing.T) {
-	helmExec, _ := exec.LookPath("helm")
+	helmExec, lookErr := exec.LookPath("helm")
 	tests := []struct {
 		env  map[string]string
 		name string
@@ -32,14 +32,17 @@ func Test_helmExecutable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "fallback to default" && lookErr != nil {
+				// helmExecutable() falls through to log.Fatalf when helm is
+				// not on PATH, which would kill the whole test binary - skip
+				// rather than exercise that path here.
+				t.Skip("helm not found on PATH")
+			}
 			for k, v := range tt.env {
-				_ = os.Setenv(k, v)
+				t.Setenv(k, v)
 			}
 			if got := helmExecutable(); got != tt.want {
 				t.Errorf("helmExecutable() = %v, want %v", got, tt.want)
-			}
-			for k, _ := range tt.env {
-				_ = os.Unsetenv(k)
 			}
 		})
 	}

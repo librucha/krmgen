@@ -9,6 +9,8 @@ on:
     tags-ignore:
       - 'v*'
       - 'draft-*'
+  pull_request:
+  workflow_dispatch:
 
 
 permissions:
@@ -55,15 +57,21 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # krmgen shells out to both binaries; the specification's support
-      # matrix pins the helm floor at 3.8.0
+      # The golden-master suite in test/golden compares byte-for-byte against
+      # goldens generated on one specific helm/kubectl pair (see
+      # test/golden/versions_test.go). Pin CI to that exact pair so the
+      # goldens compare cleanly; the specification's support matrix (helm
+      # 3.8.0+, including 4.x) is what krmgen supports at runtime, not what
+      # the golden fixtures are anchored to.
       - name: Set up helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.21.4
+          version: v4.2.4
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.3
 
       - name: Verify tool versions
         run: |
