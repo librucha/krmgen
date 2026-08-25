@@ -2,6 +2,7 @@ package template
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"text/template"
@@ -34,6 +35,23 @@ func azureFuncs() (template.FuncMap, error) {
 	return azureProvider.FuncMap(), nil
 }
 
+// aliasFunc registers funcs[alias] as a copy of funcs[target].
+//
+// Looked up with the two-value form deliberately: funcs[alias] = funcs[target]
+// alone would store a nil any if target were ever renamed or dropped (e.g. by
+// the cloud-go-templates library), and t.Funcs() panics on a nil entry
+// instead of returning an error. initFuncs can return an error just fine, so
+// surface a missing target that way instead of letting it reach t.Funcs() as
+// a panic.
+func aliasFunc(funcs template.FuncMap, alias, target string) error {
+	fn, ok := funcs[target]
+	if !ok {
+		return fmt.Errorf("template: %q is not registered, cannot alias it to %q", target, alias)
+	}
+	funcs[alias] = fn
+	return nil
+}
+
 func initFuncs(t *template.Template) error {
 	funcs := sprig.FuncMap()
 	// Deleted for security reasons
@@ -54,7 +72,9 @@ func initFuncs(t *template.Template) error {
 	}
 	// Deprecated alias: azUaIdClientId was this function's name before it moved
 	// to the library. Kept so existing krmgen.yaml files keep working.
-	funcs["azUaIdClientId"] = funcs["azUserIdentityClientId"]
+	if err := aliasFunc(funcs, "azUaIdClientId", "azUserIdentityClientId"); err != nil {
+		return err
+	}
 
 	// Add ArgoCD env function
 	funcs[argocd.EnvFunc] = argocd.ResolveArgocdEnv

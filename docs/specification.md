@@ -300,6 +300,57 @@ argument passes an empty version straight to the Key Vault API, which returns
 that service's own notion of the current version, without any client-side
 enabled/`notBefore` filtering.
 
+#### Error behaviour of unusual Azure responses
+
+The library's port of these functions converted several unchecked pointer
+dereferences — panics that took the whole krmgen process down — into
+returned errors. The record of this phase originally claimed "exactly one
+deliberate behaviour change"; there are four, listed here because that
+original claim was wrong (see the Naming note's sibling document,
+`docs/superpowers/specs/2026-08-20-krmgen-refaktoring-design.md`, corrected
+alongside this section). All four are improvements over panicking and none
+has been reverted.
+
+1. **`azStoreKey` with an empty `Keys` list** (sanctioned in the original
+   plan). The storage account has no access keys at all. Previously indexed
+   `Keys[0]` unconditionally and panicked; now returns an error naming the
+   account (`cloud-go-templates/azure/storage.go`,
+   `TestStorageKeyFunc_NoKeysIsAnErrorNotAPanic`).
+2. **`azStoreKey` with `Keys[0].Value == nil`.** Azure returned a key entry
+   with no value. Previously dereferenced the nil pointer and panicked; now
+   returns the same "no keys" error as case 1
+   (`TestStorageKeyFunc_NilFirstKeyValueIsAnError`).
+3. **`azSec` with `secret.Value == nil`.** Key Vault returned a secret
+   version with no value. Previously dereferenced the nil pointer and
+   panicked; now returns an error naming the secret and vault
+   (`cloud-go-templates/azure/secrets.go`, `TestSecret_NilValueIsAnError`).
+4. **`azUserIdentityClientId` (`azUaIdClientId`) with a missing client ID.**
+   This is the only one of the four that changes what a *successful* render
+   produces, not just what a panic produces. `identity.Properties == nil` was
+   already a panic before this phase and is now an error
+   (`TestUserIdentityClientIDFunc_NilPropertiesIsAnError`) — that part matches
+   the "panic to error" pattern of cases 1–3. But `identity.Properties.ClientID
+   == nil` (Properties present, ClientID absent) previously let a nil pointer
+   flow into the `any` the function returned, which `text/template` printed as
+   the literal string `<nil>` — the render **succeeded** with that string in
+   the output. It is now a hard error naming the identity and resource group
+   (`cloud-go-templates/azure/identity.go`,
+   `TestUserIdentityClientIDFunc_NilClientIDIsAnError`). The original phase 3
+   plan claimed "the rendered output does not change" for this function; that
+   was true for the `Properties == nil` panic case but false for the nil
+   `ClientID` case, where output changes from `<nil>` to a failed render. That
+   was a plan defect, not an implementation defect — the implementation is
+   correct and preferred.
+
+A fifth unchecked dereference, in `azKey`'s PEM-wrapping (`wrapKey` in
+`cloud-go-templates/azure/keys.go`, dereferencing `key.Key` and
+`*key.Key.Kty`), was found and fixed the same way during the same phase's
+fix wave: a Key Vault response with no key material, or a key with no
+recorded key type, now returns an error naming the key and vault instead of
+panicking (`TestKeyFunc_NoKeyMaterialIsAnError`,
+`TestKeyFunc_NoKeyTypeIsAnError`). This one was never reachable through
+krmgen's golden suite either, same as the four above.
+
 ### Sprig
 
 All [sprig](https://masterminds.github.io/sprig/) functions are available, except

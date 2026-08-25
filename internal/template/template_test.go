@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/librucha/krmgen/internal/template/argocd"
 )
@@ -141,6 +142,31 @@ func TestEvalGoTemplates_RegistersEveryDocumentedFunction(t *testing.T) {
 				t.Errorf("template function %q is not registered: %v", name, err)
 			}
 		})
+	}
+}
+
+// TestAliasFunc_MissingTargetIsAnError proves a missing alias target is
+// reported as an error rather than storing a nil entry that later panics in
+// t.Funcs(). This is the scenario a library rename or a dropped function
+// would trigger for the deprecated azUaIdClientId alias.
+func TestAliasFunc_MissingTargetIsAnError(t *testing.T) {
+	funcs := template.FuncMap{"present": func() string { return "x" }}
+	if err := aliasFunc(funcs, "alias", "missing"); err == nil {
+		t.Fatal("aliasFunc() error = nil, want an error when the target is not registered")
+	}
+	if _, ok := funcs["alias"]; ok {
+		t.Error("aliasFunc() registered the alias despite the missing target")
+	}
+}
+
+// TestAliasFunc_CopiesTheTarget proves a present target is aliased correctly.
+func TestAliasFunc_CopiesTheTarget(t *testing.T) {
+	funcs := template.FuncMap{"target": func() string { return "x" }}
+	if err := aliasFunc(funcs, "alias", "target"); err != nil {
+		t.Fatalf("aliasFunc() error = %v", err)
+	}
+	if _, ok := funcs["alias"]; !ok {
+		t.Error("aliasFunc() did not register the alias")
 	}
 }
 
