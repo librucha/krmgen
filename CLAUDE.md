@@ -129,7 +129,9 @@ Required external tools: `helm`, `kubectl` (both must be in PATH or configured v
 ## Code conventions
 
 - All comments in English
-- No validation schema wired (commented out in `parser.go`) — can be enabled
+- `resources/krmgen-config-schema.json` exists and is exercised by
+  `internal/config/schema_test.go`, but `ParseConfig` (`internal/config/parser.go`)
+  does not load or apply it at runtime — no validation schema is wired in
 - Azure functions come from the `github.com/librucha/cloud-go-templates`
   library, not from this repo. The library's provider caches clients and
   results in memory, keyed on the call's own arguments (never on the resource
