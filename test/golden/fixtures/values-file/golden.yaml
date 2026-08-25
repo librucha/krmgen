@@ -26,10 +26,10 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: rel-demo
-  namespace: default
+  namespace: from-config
 data:
-  message: "hello"
-  replicas: "1"
+  message: "from-values-file"
+  replicas: "3"
 
 ---
 # Source: demo/templates/service.yaml
@@ -37,7 +37,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: rel-demo
-  namespace: default
+  namespace: from-config
 spec:
   ports:
     - port: 80

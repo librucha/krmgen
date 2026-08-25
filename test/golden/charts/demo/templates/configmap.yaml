@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-demo
+  namespace: {{ .Release.Namespace }}
 data:
   message: {{ .Values.message | quote }}
   replicas: {{ .Values.replicaCount | quote }}

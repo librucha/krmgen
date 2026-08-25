@@ -323,3 +323,54 @@ func assertOnlyYaml(t *testing.T, stdout string) {
 		t.Fatalf("stdout contained no YAML documents\nstdout:\n%s", stdout)
 	}
 }
+
+// TestGolden_MultiConfig pins what happens with more than one KrmGen file in
+// the source directory: each is processed in its own pass and the blocks are
+// printed in directory order. Nothing merges them, and nothing deduplicates
+// the CRD both charts carry.
+func TestGolden_MultiConfig(t *testing.T) {
+	res := runScenario(t, "multi-config")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "multi-config", res.stdout)
+	for _, release := range []string{"rel-a-demo", "rel-b-demo"} {
+		if !strings.Contains(res.stdout, release) {
+			t.Errorf("output is missing %q - one config's block did not reach stdout", release)
+		}
+	}
+	for _, namespace := range []string{"namespace: alpha", "namespace: beta"} {
+		if !strings.Contains(res.stdout, namespace) {
+			t.Errorf("output is missing %q - the per-chart namespace was not applied", namespace)
+		}
+	}
+}
+
+// TestGolden_ValuesFile proves values from a file on disk actually reach the
+// render, not merely that a --values argument was assembled.
+func TestGolden_ValuesFile(t *testing.T) {
+	res := runScenario(t, "values-file")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "values-file", res.stdout)
+	if !strings.Contains(res.stdout, "from-values-file") {
+		t.Error("the message from values.yaml did not reach the rendered output")
+	}
+	if !strings.Contains(res.stdout, `replicas: "3"`) {
+		t.Error("replicaCount from values.yaml did not override the chart default")
+	}
+}
+
+// TestGolden_IncludesCrds guards a flag that is passed unconditionally and is
+// otherwise invisible: krmgen always renders with --include-crds, so a backend
+// that stopped doing so would silently drop every CRD.
+func TestGolden_IncludesCrds(t *testing.T) {
+	res := runScenario(t, "helm-only")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "kind: CustomResourceDefinition") {
+		t.Error("the chart's CRD is missing - --include-crds is no longer taking effect")
+	}
+}

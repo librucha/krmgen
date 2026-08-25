@@ -172,6 +172,20 @@ When a kustomization exists, helm output is written to a file with a generated
 name inside the working directory and appended to that kustomization's `resources`
 list. The generated filename must never appear in the output.
 
+**Known deviation:** the search is recursive but the build is not. Whichever
+kustomization the walk finds, krmgen always runs `kubectl kustomize` against the
+**root** of the working directory. A kustomization that lives only in a
+subdirectory is therefore discovered, has the generated resource file appended
+to it, and then goes unused — the build fails at the root instead:
+
+```
+error: unable to find one of 'kustomization.yaml', 'kustomization.yml' or
+'Kustomization' in directory '<workDir>'
+```
+
+Exit code 1. In practice a kustomization must sit at the top level of the source
+directory; nesting it silently costs a run rather than being rejected up front.
+
 **Known deviation:** this append happens **on disk**, once per `kind: KrmGen`
 config file (see Order of operations, step 4.2), and nothing removes a
 generated resource file or its `resources` entry once a pass has finished.

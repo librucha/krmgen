@@ -1,9 +1,32 @@
 ---
+# Source: demo/crds/demo-crd.yaml
+# Present so that --include-crds is observable in the goldens.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: demos.krmgen.test
+spec:
+  group: krmgen.test
+  scope: Namespaced
+  names:
+    plural: demos
+    singular: demo
+    kind: Demo
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+
+---
 # Source: demo/templates/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: rel-demo
+  namespace: default
 data:
   message: "hello"
   replicas: "1"
@@ -14,6 +37,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: rel-demo
+  namespace: default
 spec:
   ports:
     - port: 80
