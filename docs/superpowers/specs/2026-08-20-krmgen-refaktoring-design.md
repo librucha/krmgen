@@ -307,8 +307,8 @@ kubectl v1.36.3 / Kustomize v5.8.1), embedded cesta pinnutou verzí v
 | Nález | Fáze |
 |---|---|
 | `log.Fatal` na 27 místech → návratové chyby (v knihovně nepřípustný) | 5 (přesunuto ze 4 — plán fáze 4 se soustředil na `Builder` rozhraní pro kustomize a `log.Fatal` napříč zbytkem krmgenu vědomě neřešil; fáze 4 je uzavřená. `internal/kustomize/builder_krusty.go` a `builder_kubectl.go` už chybu vrací, ale `internal/kustomize/processor.go` a zbytek repa pořád volají `log.Fatalf`) |
-| Dva loggery: stdlib `log` v 6 souborech, logrus v jednom | 4 |
-| `os.ModePerm` (0777) a `0666` na souborech s vyrenderovanými secrets | 4 |
+| Dva loggery: stdlib `log` v 6 souborech, logrus v jednom | 5 (přesunuto ze 4 — fáze 4 se `internal/kustomize` dotkla, ale logování v něm vědomě nechala beze změny, protože golden sada testuje přesný text fatální hlášky; fáze 4 je uzavřená) |
+| `os.ModePerm` (0777) a `0666` na souborech s vyrenderovanými secrets | 5 (přesunuto ze 4 — fáze 4 tyhle cesty nezapisovala ani nečetla; fáze 4 je uzavřená) |
 | Při `log.Fatal` v `processWorkDir` se nespustí `defer os.RemoveAll` → temp adresář se secrets zůstane na disku | 5 (přesunuto ze 4 — plán fáze 4 tuto položku nikdy neřešil a fáze 4 je uzavřená) |
 | `KRMGEN_KUBECTL_EXECUTABLE` deklarovaná, dokumentovaná, nikde nepoužitá | **hotovo 4** (R1 ji zavedla doopravdy — `internal/kustomize/builder.go`, `selectBuilder`) |
 | Zakomentovaná validace schématu ukazuje na neexistující soubor | 1 |
