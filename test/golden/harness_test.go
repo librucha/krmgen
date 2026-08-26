@@ -374,3 +374,29 @@ func TestGolden_IncludesCrds(t *testing.T) {
 		t.Error("the chart's CRD is missing - --include-crds is no longer taking effect")
 	}
 }
+
+// TestGolden_KustomizeFeatures covers the transformers the other scenarios
+// never touch. The phase that swaps kustomize for a library is measured
+// against these goldens, and namespace plus labels alone would be a thin
+// thing to measure against.
+func TestGolden_KustomizeFeatures(t *testing.T) {
+	res := runScenario(t, "kustomize-features")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "kustomize-features", res.stdout)
+
+	for _, want := range []string{
+		"name: pre-demo-suf",  // namePrefix and nameSuffix
+		"namespace: features", // namespace transformer
+		"mode: patched",       // the patch replaced the base value
+		"managed-by: krmgen",  // labels transformer
+	} {
+		if !strings.Contains(res.stdout, want) {
+			t.Errorf("output is missing %q", want)
+		}
+	}
+	if !strings.Contains(res.stdout, "pre-generated-suf") {
+		t.Error("the generated ConfigMap is missing or was not renamed")
+	}
+}
