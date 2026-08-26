@@ -1,0 +1,7 @@
+version: "2"
+
+# Default linter set (errcheck, govet, ineffassign, staticcheck, unused).
+# Nothing extra enabled — the repo passes cleanly against this set as of
+# the phase-3 lint cleanup; extend deliberately, not by accident.
+linters:
+  default: standard
