@@ -14,11 +14,11 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
+      - darwin
+      - windows
     goarch:
       - amd64
       - arm64
-    goarm:
-      - "7"
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
