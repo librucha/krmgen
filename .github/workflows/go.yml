@@ -17,6 +17,25 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Pinned to the same v2.6.2 used locally (task lint) so CI and
+      # developer runs agree on findings; see .golangci.yml for the
+      # linter set.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.6.2
+
   build:
     name: Build
     runs-on: ubuntu-latest
