@@ -374,3 +374,130 @@ func TestGolden_IncludesCrds(t *testing.T) {
 		t.Error("the chart's CRD is missing - --include-crds is no longer taking effect")
 	}
 }
+
+// TestGolden_BothBackendsAgree runs every scenario that involves kustomize
+// through both backends and requires byte-identical output. This is the
+// measurement the whole phase exists to make: the goldens prove krmgen still
+// renders what it always did, and this proves the choice of backend does not
+// change what a user gets.
+func TestGolden_BothBackendsAgree(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required to compare backends: %v", err)
+	}
+
+	for _, name := range []string{
+		"kustomize-only",
+		"helm-with-kustomize",
+		"kustomize-features",
+	} {
+		t.Run(name, func(t *testing.T) {
+			embedded := runScenario(t, name)
+			if embedded.exitCode != 0 {
+				t.Fatalf("embedded backend exit code = %d\nstderr: %s", embedded.exitCode, embedded.stderr)
+			}
+			external := runScenario(t, name, "KRMGEN_KUBECTL_EXECUTABLE="+kubectlPath)
+			if external.exitCode != 0 {
+				t.Fatalf("external backend exit code = %d\nstderr: %s", external.exitCode, external.stderr)
+			}
+			if embedded.stdout != external.stdout {
+				t.Errorf("the two backends disagree:\n%s", diff(external.stdout, embedded.stdout))
+			}
+		})
+	}
+}
+
+// TestGolden_BothBackendsAgreeOnErrors extends the differential comparison to
+// the scenarios that end in a kustomize error and actually reach a backend
+// (see errors_test.go). Full stderr cannot be compared byte-for-byte the way
+// TestGolden_BothBackendsAgree compares stdout: it embeds a temp directory
+// path that differs on every run, and the external backend wraps the
+// underlying kustomize error in its own "run kubectl kustomize failed" text.
+// So this checks what actually needs to match for the two backends to be
+// interchangeable on an error path: the exit code, and the same stable
+// substring errors_test.go already asserts on for each scenario.
+//
+// "two-kustomizations" is deliberately not included here: FindKustomizeFile
+// (internal/kustomize/processor.go) calls log.Fatalf on seeing multiple
+// kustomization files before BuildKustomize ever selects a backend, so that
+// scenario never reaches either the embedded or the external code path. It
+// says nothing about backend parity - TestError_TwoKustomizations in
+// errors_test.go already covers it. Do not add it back here.
+func TestGolden_BothBackendsAgreeOnErrors(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required to compare backends: %v", err)
+	}
+
+	cases := []struct {
+		name         string
+		wantExit     int
+		stableSubstr string
+	}{
+		// Substrings match the ones TestError_MultiConfigWithKustomization and
+		// TestError_KustomizationOnlyInSubdirectory assert on in errors_test.go.
+		{name: "multi-config-kustomize", wantExit: 1, stableSubstr: "already registered id"},
+		{name: "nested-kustomization", wantExit: 1, stableSubstr: "unable to find one of 'kustomization.yaml'"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			embedded := runScenario(t, tc.name)
+			if embedded.exitCode != tc.wantExit {
+				t.Fatalf("embedded backend exit code = %d, want %d\nstderr: %s", embedded.exitCode, tc.wantExit, embedded.stderr)
+			}
+			if !strings.Contains(embedded.stderr, tc.stableSubstr) {
+				t.Fatalf("embedded backend stderr = %q, want it to contain %q", embedded.stderr, tc.stableSubstr)
+			}
+
+			external := runScenario(t, tc.name, "KRMGEN_KUBECTL_EXECUTABLE="+kubectlPath)
+			if external.exitCode != tc.wantExit {
+				t.Fatalf("external backend exit code = %d, want %d\nstderr: %s", external.exitCode, tc.wantExit, external.stderr)
+			}
+			if !strings.Contains(external.stderr, tc.stableSubstr) {
+				t.Fatalf("external backend stderr = %q, want it to contain %q", external.stderr, tc.stableSubstr)
+			}
+		})
+	}
+}
+
+// TestGolden_ExternalBackendMatchesTheGoldens keeps the external path honest:
+// the goldens are generated with whichever backend is default, so without
+// this the opt-in path could drift unnoticed.
+func TestGolden_ExternalBackendMatchesTheGoldens(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required: %v", err)
+	}
+	res := runScenario(t, "kustomize-features", "KRMGEN_KUBECTL_EXECUTABLE="+kubectlPath)
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "kustomize-features", res.stdout)
+}
+
+// TestGolden_KustomizeFeatures covers the transformers the other scenarios
+// never touch. The phase that swaps kustomize for a library is measured
+// against these goldens, and namespace plus labels alone would be a thin
+// thing to measure against.
+func TestGolden_KustomizeFeatures(t *testing.T) {
+	res := runScenario(t, "kustomize-features")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "kustomize-features", res.stdout)
+
+	for _, want := range []string{
+		"name: pre-demo-suf",  // namePrefix and nameSuffix
+		"namespace: features", // namespace transformer
+		"mode: patched",       // the patch replaced the base value
+		"managed-by: krmgen",  // labels transformer
+	} {
+		if !strings.Contains(res.stdout, want) {
+			t.Errorf("output is missing %q", want)
+		}
+	}
+	if !strings.Contains(res.stdout, "pre-generated-suf") {
+		t.Error("the generated ConfigMap is missing or was not renamed")
+	}
+}

@@ -1,0 +1,2 @@
+apiVersion: krmgen.config.librucha.com/v1alpha1
+kind: KrmGen

@@ -44,7 +44,9 @@ krmgen generate <path>
          │
          ▼
   3. If kustomization.yaml exists:
-     Inject Helm output as a resource and run `kubectl kustomize`
+     Inject Helm output as a resource and run Kustomize
+     (embedded library by default, or `kubectl kustomize`
+     when KRMGEN_KUBECTL_EXECUTABLE is set)
          │
          ▼
   4. Print final YAML to stdout
@@ -70,7 +72,7 @@ The key insight is step 1: **all files are Go-template-evaluated before Helm or 
 ## Prerequisites
 
 - [`helm`](https://helm.sh/docs/intro/install/) — must be in `PATH`
-- [`kubectl`](https://kubernetes.io/docs/tasks/tools/) — must be in `PATH` (only required when `kustomization.yaml` is present)
+- [`kubectl`](https://kubernetes.io/docs/tasks/tools/) — not required by default: Kustomize renders through the library compiled into krmgen. Only needed if you opt into the external backend via `KRMGEN_KUBECTL_EXECUTABLE` (see [Environment variables](#environment-variables))
 
 ---
 
@@ -467,7 +469,7 @@ docker run --rm -v "$(pwd):/workspace" librucha/krmgen:latest krmgen generate /w
 | `KRMGEN_HELM_EXECUTABLE` | Override path to `helm` binary |
 | `KRMGEN_HELM_USERNAME` | Helm repo username (fallback if not set in `krmgen.yaml`) |
 | `KRMGEN_HELM_PASSWORD` | Helm repo password (fallback if not set in `krmgen.yaml`) |
-| `KRMGEN_KUBECTL_EXECUTABLE` | Declared but not implemented — kubectl is always invoked from PATH (see specification) |
+| `KRMGEN_KUBECTL_EXECUTABLE` | Opt into the external `kubectl kustomize` backend: that path is used as kubectl. Unset (the default) renders through the Kustomize library compiled into krmgen instead (see specification) |
 
 For Azure authentication, krmgen uses the standard Azure SDK environment variables:
 
@@ -487,7 +489,7 @@ See [Azure SDK authentication](https://learn.microsoft.com/en-us/azure/developer
 
 - Go 1.21+
 - [Task](https://taskfile.dev) (`brew install go-task`)
-- `helm` and `kubectl` in PATH
+- `helm` and `kubectl` in PATH — `kubectl` is not needed to build or run krmgen itself (Kustomize renders through the embedded library by default), but `task test` exercises the external `kubectl` backend too, for differential parity tests
 
 ### Common tasks
 
@@ -514,7 +516,7 @@ cmd/                    CLI commands (cobra)
 internal/
   config/               krmgen.yaml parsing and processing
   helm/                 helm template execution (HTTP + OCI generators)
-  kustomize/            kubectl kustomize execution
+  kustomize/            Kustomize execution (embedded library by default, external kubectl opt-in)
   template/             Go template engine + all function providers
     azure/              Azure Key Vault, storage, identity providers
     argocd/             ArgoCD env var provider

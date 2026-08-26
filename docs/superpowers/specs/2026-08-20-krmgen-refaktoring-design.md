@@ -145,7 +145,7 @@ jen rozhraní.
 | 1 | Specifikace kontraktu | spec + JSON Schema | odsouhlasená |
 | 2 | Golden-master + unit testy | testovací síť | **hotovo 2026-08-25**: 8 scénářů, pokrytí 71,4 % (viz níže) |
 | 3 | Knihovna šablon ven | `cloud-go-templates` v1 | **hotovo 2026-08-25**: goldeny beze změny (viz níže) |
-| 4 | kustomize → krusty | `Builder` + 2 impl. | goldeny beze změny nebo schválený diff |
+| 4 | kustomize → krusty | `Builder` + 2 impl. | **hotovo 2026-08-26**: goldeny beze změny, parita ověřena testem (viz níže) |
 | 5 | helm → SDK | `Renderer` + 2 impl. | naměřená parita → rozhodnutí jít/nejít |
 
 Fáze 5 je jediná s reálnou možností „ne". Rozhodne se podle naměřené parity, ne dopředu.
@@ -270,15 +270,56 @@ lokální adresář `../cloud-go-templates`. Dokud knihovna nebude pushnutá a
 otagovaná (rozhodnutí uživatele, implementeři nepushují), krmgen nejde
 postavit nikde jinde než na tomto stroji.
 
+### Fáze 4 — výsledek
+
+Dokončeno 2026-08-26. `internal/kustomize` dostal rozhraní `Builder`
+(`builder.go`) se dvěma implementacemi: `krustyBuilder`
+(`builder_krusty.go`), postavená na `sigs.k8s.io/kustomize/api` v0.21.1
+pinnuté v `go.mod`, a `kubectlBuilder` (`builder_kubectl.go`), která dál
+spouští `kubectl kustomize` jako subprocess. `selectBuilder()` volí podle
+`KRMGEN_KUBECTL_EXECUTABLE` — to naplnilo R1 i R2 zároveň: obě cesty
+existují natrvalo (R1) a výchozí je od tohoto commitu embedded (R2).
+`KRMGEN_KUBECTL_EXECUTABLE`, dřív deklarovaná a nikde nečtená, je teď
+skutečně jediné místo, které o volbu backendu rozhoduje.
+
+Parita mezi backendy je naměřená, ne předpokládaná:
+`TestGolden_BothBackendsAgree` (`test/golden/harness_test.go`) pustí každý
+scénář, který kustomize vyrenderuje úspěšně (`kustomize-only`,
+`helm-with-kustomize`, `kustomize-features`), oběma backendy a vyžaduje
+bajtově identický stdout; `TestGolden_BothBackendsAgreeOnErrors` totéž udělal
+pro dvě chybové cesty, které backend vůbec dosáhnou
+(`multi-config-kustomize`, `nested-kustomization`), kde bajtová shoda nejde —
+stderr nese cestu do dočasného adresáře a externí backend chybu z kustomize
+obaluje jinak ("run kubectl kustomize failed: ..." vs. "run kustomize
+failed: ..."). Tam se porovnává exit kód a stabilní podřetězec stderr. Oba
+backendy hlásí stejnou podkladovou chybu kustomize v obou scénářích — žádný
+rozdíl nebyl potřeba zapisovat jako výjimku.
+
+Třetí chybový scénář, `two-kustomizations`, do tohoto diferenciálního testu
+záměrně nepatří: `FindKustomizeFile` (`internal/kustomize/processor.go`)
+selže na nalezení více kustomization souborů dřív, než `BuildKustomize` vůbec
+zavolá `selectBuilder()`, takže tenhle scénář se k žádnému backendu nikdy
+nedostane a o paritě backendů nic nevypovídá. Pokrývá ho
+`TestError_TwoKustomizations` (`test/golden/errors_test.go`).
+
+Goldeny beze změny (`git diff adde3be..HEAD --stat -- test/golden/fixtures/`
+ukazuje jen nový scénář `kustomize-features` z úlohy 1, žádný existující
+golden se nepohnul).
+
+Jediná zaznamenaná odchylka mezi backendy zůstává verze kustomize — externí
+cesta renderuje tím, co embeduje nainstalovaný kubectl (naměřeno v této fázi:
+kubectl v1.36.3 / Kustomize v5.8.1), embedded cesta pinnutou verzí v
+`go.mod`. Zapsáno v `docs/specification.md`, sekce 5 a 6.
+
 ### Kvalita kódu — přiřazení k fázím
 
 | Nález | Fáze |
 |---|---|
-| `log.Fatal` na 27 místech → návratové chyby (v knihovně nepřípustný) | 4 (přesunuto z 3 při fix wave fáze 3 — fáze 3 přesunula Azure funkce do knihovny, která `log.Fatal` skutečně nepoužívá, ale zbytek krmgenu, kde ke všem 27 výskytům došlo, se v plánu fáze 3 neřešil a fáze 3 je uzavřená) |
-| Dva loggery: stdlib `log` v 6 souborech, logrus v jednom | 4 |
-| `os.ModePerm` (0777) a `0666` na souborech s vyrenderovanými secrets | 4 |
-| Při `log.Fatal` v `processWorkDir` se nespustí `defer os.RemoveAll` → temp adresář se secrets zůstane na disku | 4 (přesunuto z 3 při fix wave fáze 3 — plán fázi 3 tuto položku nikdy neřešil a fáze 3 je uzavřená) |
-| `KRMGEN_KUBECTL_EXECUTABLE` deklarovaná, dokumentovaná, nikde nepoužitá | 4 (R1 ji zavádí doopravdy) |
+| `log.Fatal` na 27 místech → návratové chyby (v knihovně nepřípustný) | 5 (přesunuto ze 4 — plán fáze 4 se soustředil na `Builder` rozhraní pro kustomize a `log.Fatal` napříč zbytkem krmgenu vědomě neřešil; fáze 4 je uzavřená. `internal/kustomize/builder_krusty.go` a `builder_kubectl.go` už chybu vrací, ale `internal/kustomize/processor.go` a zbytek repa pořád volají `log.Fatalf`) |
+| Dva loggery: stdlib `log` v 6 souborech, logrus v jednom | 5 (přesunuto ze 4 — fáze 4 se `internal/kustomize` dotkla, ale logování v něm vědomě nechala beze změny, protože golden sada testuje přesný text fatální hlášky; fáze 4 je uzavřená) |
+| `os.ModePerm` (0777) a `0666` na souborech s vyrenderovanými secrets | 5 (přesunuto ze 4 — fáze 4 tyhle cesty nezapisovala ani nečetla; fáze 4 je uzavřená) |
+| Při `log.Fatal` v `processWorkDir` se nespustí `defer os.RemoveAll` → temp adresář se secrets zůstane na disku | 5 (přesunuto ze 4 — plán fáze 4 tuto položku nikdy neřešil a fáze 4 je uzavřená) |
+| `KRMGEN_KUBECTL_EXECUTABLE` deklarovaná, dokumentovaná, nikde nepoužitá | **hotovo 4** (R1 ji zavedla doopravdy — `internal/kustomize/builder.go`, `selectBuilder`) |
 | Zakomentovaná validace schématu ukazuje na neexistující soubor | 1 |
 | Překlepy v chybových hláškách (`failerd`, `crating`, `unwraping`) | průběžně |
 
