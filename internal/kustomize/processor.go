@@ -58,15 +58,11 @@ func BuildKustomize(kustomizeFile string, workDir string, resources string) stri
 	}
 	prepareKustomizeFile(kustomizeFile, resourcesFile, workDir)
 
-	args := []string{
-		"kustomize",
-		workDir,
-	}
-	stdOut, stdErr, err := runCommand("kubectl", args...)
+	out, err := newKubectlBuilder("kubectl").Build(workDir)
 	if err != nil {
-		log.Fatalf("run kubectl kustomize failed error: %s reason: %s", err, stdErr)
+		log.Fatalf("%s", err)
 	}
-	return stdOut
+	return out
 }
 
 func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir string) {
