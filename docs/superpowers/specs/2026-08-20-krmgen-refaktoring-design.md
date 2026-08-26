@@ -144,7 +144,7 @@ jen rozhraní.
 |---|---|---|---|
 | 1 | Specifikace kontraktu | spec + JSON Schema | odsouhlasená |
 | 2 | Golden-master + unit testy | testovací síť | **hotovo 2026-08-25**: 8 scénářů, pokrytí 71,4 % (viz níže) |
-| 3 | Knihovna šablon ven | `cloud-go-templates` v1 | goldeny beze změny |
+| 3 | Knihovna šablon ven | `cloud-go-templates` v1 | **hotovo 2026-08-25**: goldeny beze změny (viz níže) |
 | 4 | kustomize → krusty | `Builder` + 2 impl. | goldeny beze změny nebo schválený diff |
 | 5 | helm → SDK | `Renderer` + 2 impl. | naměřená parita → rozhodnutí jít/nejít |
 
@@ -208,14 +208,76 @@ neprosakuje, ale test to musí explicitně hlídat.
 CI dnes testy vůbec nespouští, jen `make build`. Přibude `go test -race ./...` a instalace
 helmu a kubectl, protože externí backend je podporovaná cesta a musí se testovat.
 
+### Fáze 3 — výsledek
+
+Dokončeno 2026-08-25. Azure šablonovací funkce (`azSec`, `toPem`, `azPfxKey`,
+`azPfxCrt`, `azCert`, `azKey`, `azStoreKey`, `azUserIdentityClientId`) se
+přestěhovaly do `github.com/librucha/cloud-go-templates` (balíček `azure`);
+krmgen je bere jako závislost přes `replace` na lokální adresář a slučuje
+jejich `FuncMap()` do vlastní registrace funkcí v
+`internal/template/template.go`.
+
+Z krmgenu odešlo **1504 řádků**, přibylo 67 (přepojení v `template.go` a
+smazání celého podstromu `internal/template/azure/...`) — čistý úbytek přes
+1400 řádků. Pokrytí:
+
+- krmgen: **73,9 %** celkem přes celý modul — vzrostlo z 71,4 % (fáze 2),
+  protože odstraněné Azure balíčky měly pokrytí 61–77 %, tedy pod průměrem
+  zbytku; jejich odchodem se průměr zvedl. Balíček `internal/template` sám
+  o sobě naopak klesl, 96,4 % → 87,9 % — `azureFuncs()`/`sync.Once` obálka
+  má chybovou větev (selhání konstrukce provideru), kterou krmgenovy vlastní
+  testy nepokrývají, protože tahle větev je otestovaná v knihovně. Ani jedno
+  není regrese, obojí je očekávaný důsledek přesunu kódu.
+- `cloud-go-templates`: **85,9 %**
+
+Goldeny beze změny (`git status --porcelain test/golden/fixtures/` prázdný) —
+Azure funkce goldeny nepokrývají, takže jedinou pojistkou proti rozbité
+registraci je nový test `TestEvalGoTemplates_RegistersEveryDocumentedFunction`
+(`internal/template/template_test.go`), který přes `{{ if false }}{{ <jméno> }}{{ end }}`
+ověří, že je zaregistrované každé zdokumentované jméno včetně deprecated
+aliasu `azUaIdClientId`.
+
+**Vědomé změny chování — čtyři, ne jedna.** Tenhle záznam původně tvrdil
+"jedinou vědomou změnu chování"; revize fáze 3 to opravila, protože to
+neplatilo. Plné znění a testy pro všechny čtyři jsou v
+`docs/specification.md` (sekce 4, "Error behaviour of unusual Azure
+responses"); shrnutí:
+
+1. `azStoreKey` s prázdným `Keys` (schváleno v původním plánu) — původní kód
+   indexoval první storage account key bez kontroly délky pole, takže účet
+   bez klíčů shodil celý proces; knihovna vrací chybu
+   (`cloud-go-templates/azure/storage.go`,
+   `TestStorageKeyFunc_NoKeysIsAnErrorNotAPanic`).
+2. `azStoreKey` s `Keys[0].Value == nil` — dřív panika, teď chyba
+   (`TestStorageKeyFunc_NilFirstKeyValueIsAnError`).
+3. `azSec` s `secret.Value == nil` — dřív panika, teď chyba
+   (`TestSecret_NilValueIsAnError`).
+4. `azUserIdentityClientId` (`azUaIdClientId`) — `Properties == nil` byla
+   panika, teď je to chyba; **a `ClientID == nil`, který se dřív vyrenderoval
+   jako `<nil>`, je teď tvrdá chyba.** Tohle je jediná ze čtyř změn, která
+   mění výstup úspěšného renderu, ne jen chování paniky — původní tvrzení
+   plánu "výstup se nemění" bylo pro tenhle nil-`ClientID` případ chybné (viz
+   `docs/specification.md`, kde je to opravené).
+
+Všechny čtyři jsou vylepšení oproti pádu procesu a žádná se nevrací zpět.
+
+`azUaIdClientId` bylo přejmenováno na `azUserIdentityClientId` (staré jméno
+zůstává jako deprecated alias v krmgenu, knihovna sama exponuje jen nové) —
+narovnáno v `CLAUDE.md` a `docs/specification.md`.
+
+Rozhodnutí, které zbývá uživateli: `replace` v `go.mod` krmgenu ukazuje na
+lokální adresář `../cloud-go-templates`. Dokud knihovna nebude pushnutá a
+otagovaná (rozhodnutí uživatele, implementeři nepushují), krmgen nejde
+postavit nikde jinde než na tomto stroji.
+
 ### Kvalita kódu — přiřazení k fázím
 
 | Nález | Fáze |
 |---|---|
-| `log.Fatal` na 27 místech → návratové chyby (v knihovně nepřípustný) | 3 |
+| `log.Fatal` na 27 místech → návratové chyby (v knihovně nepřípustný) | 4 (přesunuto z 3 při fix wave fáze 3 — fáze 3 přesunula Azure funkce do knihovny, která `log.Fatal` skutečně nepoužívá, ale zbytek krmgenu, kde ke všem 27 výskytům došlo, se v plánu fáze 3 neřešil a fáze 3 je uzavřená) |
 | Dva loggery: stdlib `log` v 6 souborech, logrus v jednom | 4 |
 | `os.ModePerm` (0777) a `0666` na souborech s vyrenderovanými secrets | 4 |
-| Při `log.Fatal` v `processWorkDir` se nespustí `defer os.RemoveAll` → temp adresář se secrets zůstane na disku | 3 |
+| Při `log.Fatal` v `processWorkDir` se nespustí `defer os.RemoveAll` → temp adresář se secrets zůstane na disku | 4 (přesunuto z 3 při fix wave fáze 3 — plán fázi 3 tuto položku nikdy neřešil a fáze 3 je uzavřená) |
 | `KRMGEN_KUBECTL_EXECUTABLE` deklarovaná, dokumentovaná, nikde nepoužitá | 4 (R1 ji zavádí doopravdy) |
 | Zakomentovaná validace schématu ukazuje na neexistující soubor | 1 |
 | Překlepy v chybových hláškách (`failerd`, `crating`, `unwraping`) | průběžně |
