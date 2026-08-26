@@ -1,6 +1,7 @@
 package golden
 
 import (
+	"debug/buildinfo"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -81,6 +82,46 @@ func runningHelmVersion() (string, error) {
 		return "", fmt.Errorf("running helm version --short: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// anchorKustomizeAPIVersion is the sigs.k8s.io/kustomize/api version compiled
+// into krmgen. Output was verified byte-identical between this version and
+// the kubectl anchored above; a different pair may render differently, and
+// then a golden diff is a tooling change, not a product regression.
+const anchorKustomizeAPIVersion = "v0.21.1"
+
+// TestEmbeddedKustomizeMatchesTheAnchor reads the module dependency versions
+// embedded in the built krmgen binary (the same one the golden scenarios
+// exec) via debug/buildinfo.ReadFile.
+//
+// The obvious alternative - runtime/debug.ReadBuildInfo() called from inside
+// this test itself, on the theory that the test binary and krmgen compile
+// from the same go.mod so either reports the same versions - does not work:
+// `go test` only populates BuildInfo.Deps when the package under test is
+// itself `package main`. For any library package, including this one, Deps
+// comes back empty regardless of what is actually linked in, so every
+// dependency lookup would report "not among the build dependencies" even
+// when the compiled-in version matches the anchor exactly (verified against
+// go 1.21.5, 1.26.0 and 1.26.3). Reading the built krmgen binary from disk
+// sidesteps the limitation entirely and inspects the actual shipped
+// artifact rather than a proxy for it.
+func TestEmbeddedKustomizeMatchesTheAnchor(t *testing.T) {
+	bin := binaryPath(t)
+	info, err := buildinfo.ReadFile(bin)
+	if err != nil {
+		t.Fatalf("reading build info from %s: %v", bin, err)
+	}
+	for _, dep := range info.Deps {
+		if dep.Path == "sigs.k8s.io/kustomize/api" {
+			if dep.Version != anchorKustomizeAPIVersion {
+				t.Errorf("kustomize/api is %s, goldens were generated against %s - "+
+					"this is a tooling change, not a product regression; verify the "+
+					"output before updating the anchor", dep.Version, anchorKustomizeAPIVersion)
+			}
+			return
+		}
+	}
+	t.Error("sigs.k8s.io/kustomize/api is not among the build dependencies")
 }
 
 func runningKustomizeVersion() (string, error) {

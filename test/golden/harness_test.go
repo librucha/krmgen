@@ -375,6 +375,53 @@ func TestGolden_IncludesCrds(t *testing.T) {
 	}
 }
 
+// TestGolden_BothBackendsAgree runs every scenario that involves kustomize
+// through both backends and requires byte-identical output. This is the
+// measurement the whole phase exists to make: the goldens prove krmgen still
+// renders what it always did, and this proves the choice of backend does not
+// change what a user gets.
+func TestGolden_BothBackendsAgree(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required to compare backends: %v", err)
+	}
+
+	for _, name := range []string{
+		"kustomize-only",
+		"helm-with-kustomize",
+		"kustomize-features",
+	} {
+		t.Run(name, func(t *testing.T) {
+			embedded := runScenario(t, name)
+			if embedded.exitCode != 0 {
+				t.Fatalf("embedded backend exit code = %d\nstderr: %s", embedded.exitCode, embedded.stderr)
+			}
+			external := runScenario(t, name, "KRMGEN_KUBECTL_EXECUTABLE="+kubectlPath)
+			if external.exitCode != 0 {
+				t.Fatalf("external backend exit code = %d\nstderr: %s", external.exitCode, external.stderr)
+			}
+			if embedded.stdout != external.stdout {
+				t.Errorf("the two backends disagree:\n%s", diff(external.stdout, embedded.stdout))
+			}
+		})
+	}
+}
+
+// TestGolden_ExternalBackendMatchesTheGoldens keeps the external path honest:
+// the goldens are generated with whichever backend is default, so without
+// this the opt-in path could drift unnoticed.
+func TestGolden_ExternalBackendMatchesTheGoldens(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required: %v", err)
+	}
+	res := runScenario(t, "kustomize-features", "KRMGEN_KUBECTL_EXECUTABLE="+kubectlPath)
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "kustomize-features", res.stdout)
+}
+
 // TestGolden_KustomizeFeatures covers the transformers the other scenarios
 // never touch. The phase that swaps kustomize for a library is measured
 // against these goldens, and namespace plus labels alone would be a thin
