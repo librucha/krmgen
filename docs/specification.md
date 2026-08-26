@@ -540,7 +540,7 @@ its credentials are carried only on the `template` command itself.
 | Tool | Supported | Verified against |
 |---|---|---|
 | helm | 3.8.0 and later, including 4.x | v3.8.2, v3.21.4, v4.2.4 |
-| kubectl | any release providing `kubectl kustomize` | v1.36.3 / Kustomize v5.8.1 |
+| kubectl (external backend only, see Section 5) | any release providing `kubectl kustomize` | v1.36.3 / Kustomize v5.8.1 |
 
 **Why helm 3.8.0 is the floor.** OCI registry support became generally available
 in helm 3.8.0. Earlier releases treat it as experimental and refuse to act on an
@@ -638,16 +638,17 @@ Users depending on helm plugins or post-renderers must set
 
 Both kustomize backends are required to render byte-identical output on
 every scenario that renders successfully, and `TestGolden_BothBackendsAgree`
-(`test/golden/harness_test.go`) enforces it for every scenario the golden
-suite covers. The two scenarios that end in a kustomize error —
-`multi-config-kustomize` and `two-kustomizations` — cannot be compared that
-way: stderr carries a temporary directory path that differs between runs, and
-the external backend wraps the underlying kustomize error in its own "run
-kubectl kustomize failed" text where the embedded backend does not. For those,
-`TestGolden_BothBackendsAgreeOnErrors` requires the same exit code and the
-same stable substring in stderr instead of byte-identical stderr. Both
-backends were found to raise the same underlying kustomize error in both
-cases.
+(`test/golden/harness_test.go`) enforces it for every such scenario the golden
+suite covers: `kustomize-only`, `helm-with-kustomize`, `kustomize-features`.
+The three scenarios that end in a kustomize error —
+`multi-config-kustomize`, `two-kustomizations`, and `nested-kustomization` —
+cannot be compared that way: stderr carries a temporary directory path that
+differs between runs, and the external backend wraps the underlying
+kustomize error in its own "run kubectl kustomize failed" text where the
+embedded backend does not. For those, `TestGolden_BothBackendsAgreeOnErrors`
+requires the same exit code and the same stable substring in stderr instead
+of byte-identical stderr. Both backends were found to raise the same
+underlying kustomize error in all three cases.
 
 The one thing that differs between the backends is the version: the external
 path renders with whatever kustomize the installed kubectl embeds, which on

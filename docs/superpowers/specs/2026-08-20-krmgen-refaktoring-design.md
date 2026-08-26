@@ -284,14 +284,16 @@ skutečně jediné místo, které o volbu backendu rozhoduje.
 
 Parita mezi backendy je naměřená, ne předpokládaná:
 `TestGolden_BothBackendsAgree` (`test/golden/harness_test.go`) pustí každý
-scénář, který používá kustomize, oběma backendy a vyžaduje bajtově identický
-stdout; `TestGolden_BothBackendsAgreeOnErrors` totéž udělal pro dvě chybové
-cesty (`multi-config-kustomize`, `two-kustomizations`), kde bajtová shoda
-nejde — stderr nese cestu do dočasného adresáře a externí backend chybu z
-kustomize obaluje jinak ("run kubectl kustomize failed: ..." vs. "run
-kustomize failed: ..."). Tam se porovnává exit kód a stabilní podřetězec
-stderr. Oba backendy hlásí stejnou podkladovou chybu kustomize v obou
-scénářích — žádný rozdíl nebyl potřeba zapisovat jako výjimku.
+scénář, který kustomize vyrenderuje úspěšně (`kustomize-only`,
+`helm-with-kustomize`, `kustomize-features`), oběma backendy a vyžaduje
+bajtově identický stdout; `TestGolden_BothBackendsAgreeOnErrors` totéž udělal
+pro všechny tři chybové cesty (`multi-config-kustomize`, `two-kustomizations`,
+`nested-kustomization`), kde bajtová shoda nejde — stderr nese cestu do
+dočasného adresáře a externí backend chybu z kustomize obaluje jinak ("run
+kubectl kustomize failed: ..." vs. "run kustomize failed: ..."). Tam se
+porovnává exit kód a stabilní podřetězec stderr. Oba backendy hlásí stejnou
+podkladovou chybu kustomize ve všech třech scénářích — žádný rozdíl nebyl
+potřeba zapisovat jako výjimku.
 
 Goldeny beze změny (`git diff adde3be..HEAD --stat -- test/golden/fixtures/`
 ukazuje jen nový scénář `kustomize-features` z úlohy 1, žádný existující

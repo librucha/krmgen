@@ -408,7 +408,7 @@ func TestGolden_BothBackendsAgree(t *testing.T) {
 }
 
 // TestGolden_BothBackendsAgreeOnErrors extends the differential comparison to
-// the two scenarios that end in a kustomize error (see errors_test.go).
+// the three scenarios that end in a kustomize error (see errors_test.go).
 // Full stderr cannot be compared byte-for-byte the way TestGolden_BothBackendsAgree
 // compares stdout: it embeds a temp directory path that differs on every run,
 // and the external backend wraps the underlying kustomize error in its own
@@ -427,10 +427,12 @@ func TestGolden_BothBackendsAgreeOnErrors(t *testing.T) {
 		wantExit     int
 		stableSubstr string
 	}{
-		// Substrings match the ones TestError_TwoKustomizations and
-		// TestError_MultiConfigWithKustomization assert on in errors_test.go.
+		// Substrings match the ones TestError_TwoKustomizations,
+		// TestError_MultiConfigWithKustomization and
+		// TestError_KustomizationOnlyInSubdirectory assert on in errors_test.go.
 		{name: "two-kustomizations", wantExit: 1, stableSubstr: "multiple kustomization files"},
 		{name: "multi-config-kustomize", wantExit: 1, stableSubstr: "already registered id"},
+		{name: "nested-kustomization", wantExit: 1, stableSubstr: "unable to find one of 'kustomization.yaml'"},
 	}
 
 	for _, tc := range cases {

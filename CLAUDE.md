@@ -29,9 +29,9 @@ internal/
     processor.go        → TemplateHelmCharts, runs `helm template` binary
   kustomize/
     processor.go        → FindKustomizeFile, BuildKustomize (prepares the kustomization, then delegates to a Builder)
-    builder.go           → Builder interface, selectBuilder (embedded vs kubectl, keyed on KRMGEN_KUBECTL_EXECUTABLE)
-    builder_krusty.go     → embedded backend, sigs.k8s.io/kustomize/api (default)
-    builder_kubectl.go    → external backend, shells out to kubectl kustomize
+    builder.go          → Builder interface, selectBuilder (embedded vs kubectl, keyed on KRMGEN_KUBECTL_EXECUTABLE)
+    builder_krusty.go   → embedded backend, sigs.k8s.io/kustomize/api (default)
+    builder_kubectl.go  → external backend, shells out to kubectl kustomize
   template/
     template.go         → EvalGoTemplates — registers all template funcs
     argocd/             → argocdEnv func (ARGOCD_ENV_* / ARGOCD_APP_* env vars)
@@ -114,7 +114,7 @@ task docker-build   # goreleaser snapshot (no publish)
 task release        # goreleaser release + Docker push (needs DOCKER_USERNAME/PASSWORD)
 ```
 
-Required external tools: `helm`, `kubectl` (both must be in PATH or configured via env).
+Required external tools: `helm` (in PATH or configured via `KRMGEN_HELM_EXECUTABLE`). `kubectl` is only needed if opting into the external kustomize backend via `KRMGEN_KUBECTL_EXECUTABLE`.
 
 ## Release process
 
