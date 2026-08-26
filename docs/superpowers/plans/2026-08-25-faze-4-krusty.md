@@ -193,9 +193,12 @@ Ověř, že tam je: Service i ConfigMap s prefixem i suffixem, namespace `featur
 ```bash
 go test ./test/golden/ -count=1 >/dev/null && echo "beh 1 OK"
 go test ./test/golden/ -count=1 >/dev/null && echo "beh 2 OK"
-sed -i '' 's/mode: base/mode: BASE/' test/golden/fixtures/kustomize-features/base.yaml
+# Poskoz pole, ktere do vystupu SKUTECNE jde. `mode` v base.yaml to neni -
+# patch.yaml ho bezpodminecne prepisuje, takze zmena base hodnoty vystup nezmeni
+# a test by prosel. Nula selhani tu neznamena zdravy golden, ale spatny test.
+sed -i '' 's/port: 80/port: 8080/' test/golden/fixtures/kustomize-features/base.yaml
 go test ./test/golden/ -run TestGolden_KustomizeFeatures -count=1 2>&1 | grep -c FAIL | xargs -I{} echo "po poskozeni FAIL: {} (1 = spravne)"
-sed -i '' 's/mode: BASE/mode: base/' test/golden/fixtures/kustomize-features/base.yaml
+sed -i '' 's/port: 8080/port: 80/' test/golden/fixtures/kustomize-features/base.yaml
 go test ./test/golden/ -run TestGolden_KustomizeFeatures -count=1 >/dev/null && echo "po obnove OK"
 ```
 
