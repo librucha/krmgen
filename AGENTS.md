@@ -2,7 +2,7 @@
 
 ## Project summary
 
-CLI tool (`krmgen`) that generates Kubernetes YAML by running `helm template` + `kubectl kustomize` and evaluating Go templates in config files. Written in Go.
+CLI tool (`krmgen`) that generates Kubernetes YAML by running `helm template` + Kustomize (rendered by the embedded `sigs.k8s.io/kustomize/api` library by default, or by `kubectl kustomize` when `KRMGEN_KUBECTL_EXECUTABLE` is set) and evaluating Go templates in config files. Written in Go.
 
 ## Key entry points
 
@@ -31,7 +31,7 @@ If `task` is not installed: `go build -o build/krmgen .` and `go test ./...`
 
 ## Important constraints
 
-- External binaries `helm` and `kubectl` must be present in PATH for integration to work.
+- External binary `helm` must be present in PATH. `kubectl` is only needed if `KRMGEN_KUBECTL_EXECUTABLE` opts into the external Kustomize backend — the default path renders through the embedded library and needs no `kubectl`.
 - Template functions `env` and `expandenv` are intentionally removed from sprig for security.
 - Azure providers use `azidentity.NewDefaultAzureCredential` — requires valid Azure auth in environment.
 - Errors use `log.Fatal` (intentional CLI pattern — no error recovery).
