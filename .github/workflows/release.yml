@@ -1,59 +1,55 @@
 name: Release KrmGen
+
 permissions:
   contents: write
+
 on:
   push:
     tags:
       - 'v*'
-      - 'draft-*'
 
 jobs:
-  publishGitRelease:
+  goreleaser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          go-version: '^1.20'
+          # goreleaser needs the full history and all tags for changelog generation
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
           check-latest: true
-#      - name: Compile man page markup
-#        id: gen-man-page-md
-#        run: |
-#          ./scripts/generate-man-page-md.sh
 
-      - name: Get the version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF##*/}" >> "${GITHUB_OUTPUT}"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-#      - name: Generate man page
-#        uses: docker://pandoc/core:2.14.2
-#        id: gen-man-page
-#        with:
-#          args: >-
-#            --standalone
-#            --to man
-#            --variable=title:"KrmGen"
-#            --variable=section:"1"
-#            --variable=header:"yq (https://github.com/librucha/krmgen/) version ${{ steps.get_version.outputs.VERSION }}"
-#            --variable=author:"Libor Ondrusek"
-#            --output=krmgen.1
-#            man.md
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-
-      - name: Build and push docker image
-        run: |
-          echo '${{ secrets.DOCKER_PASSWORD }}' | docker login -u '${{ secrets.DOCKER_USERNAME }}' --password-stdin
-          make docker-release
-
-      - name: Build all platforms
-        run: |
-          sudo apt-get install rhash -y
-          go install github.com/mitchellh/gox@v1.0.1
-          make all-dist
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v6
         with:
-          files: build/*
-          draft: true
-          fail_on_unmatched_files: true
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}

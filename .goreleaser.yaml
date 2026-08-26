@@ -27,7 +27,7 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
+    formats: [ tar.gz ]
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -38,7 +38,7 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [ zip ]
     files:
       - LICENSE*
       - README*
@@ -70,8 +70,37 @@ dockers_v2:
       "org.opencontainers.image.source": "{{.GitURL}}"
       "org.opencontainers.image.vendor": "librucha@gmail.com"
 
+signs:
+  - id: checksums
+    artifacts: checksum
+    cmd: gpg
+    # GPG_FINGERPRINT is exported by the import-gpg action in CI
+    args:
+      - "--batch"
+      - "--pinentry-mode"
+      - "loopback"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+
+changelog:
+  # Let GitHub build the release notes automatically from commits and PRs
+  use: github-native
+
 release:
-  disable: true
+  disable: false
+  github:
+    owner: librucha
+    name: krmgen
+  # Use GitHub's auto-generated release notes as the release body
+  mode: replace
+  draft: false
+  prerelease: auto
+  make_latest: true
+  name_template: "{{ .ProjectName }} {{ .Version }}"
 
 dockerhub:
   - description: "CLI tool for generate Kubernetes Resource Model from helm and kustomization together"
