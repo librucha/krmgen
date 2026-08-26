@@ -540,7 +540,7 @@ its credentials are carried only on the `template` command itself.
 | Tool | Supported | Verified against |
 |---|---|---|
 | helm | 3.8.0 and later, including 4.x | v3.8.2, v3.21.4, v4.2.4 |
-| kubectl (external backend only, see Section 5) | any release providing `kubectl kustomize` | v1.36.3 / Kustomize v5.8.1 |
+| kubectl (external kustomize backend only) | any release providing `kubectl kustomize` | v1.36.3 / Kustomize v5.8.1 |
 
 **Why helm 3.8.0 is the floor.** OCI registry support became generally available
 in helm 3.8.0. Earlier releases treat it as experimental and refuse to act on an
