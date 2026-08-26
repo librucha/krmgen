@@ -184,7 +184,7 @@ func Test_credentialsProvided(t *testing.T) {
 			if got := credentialsProvided(tt.args.config); got != tt.want {
 				t.Errorf("credentialsProvided() = %v, want %v", got, tt.want)
 			}
-			for k, _ := range tt.env {
+			for k := range tt.env {
 				_ = os.Unsetenv(k)
 			}
 		})
@@ -286,7 +286,7 @@ func Test_credentialsArgs(t *testing.T) {
 			if got := credentialsArgs(tt.args.config); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("credentialsArgs() = %v, want %v", got, tt.want)
 			}
-			for k, _ := range tt.env {
+			for k := range tt.env {
 				_ = os.Unsetenv(k)
 			}
 		})

@@ -131,7 +131,9 @@ func TestKrustyBuilder_ReportsAMissingKustomization(t *testing.T) {
 
 func TestSelectBuilder_EmbeddedByDefault(t *testing.T) {
 	t.Setenv(cons.EnvKubectlExecutable, "")
-	os.Unsetenv(cons.EnvKubectlExecutable)
+	if err := os.Unsetenv(cons.EnvKubectlExecutable); err != nil {
+		t.Fatalf("os.Unsetenv() error = %v", err)
+	}
 
 	if got := selectBuilder().Name(); got != "embedded kustomize" {
 		t.Errorf("selectBuilder() = %q, want the embedded backend when no executable is configured", got)

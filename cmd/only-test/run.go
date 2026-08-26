@@ -10,7 +10,7 @@ import (
 
 func main() {
 	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, %s", r.Proto)
+		_, _ = fmt.Fprintf(w, "Hello, %s", r.Proto)
 	}))
 	ts.EnableHTTP2 = true
 	ts.StartTLS()
@@ -21,7 +21,7 @@ func main() {
 		log.Fatal(err)
 	}
 	greeting, err := io.ReadAll(res.Body)
-	res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if err != nil {
 		log.Fatal(err)
 	}

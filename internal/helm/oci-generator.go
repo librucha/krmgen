@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-var helmRegistryRegexp = regexp.MustCompile("\\w+://([0-9a-zA-Z-_.]+)/.*")
+var helmRegistryRegexp = regexp.MustCompile(`\w+://([0-9a-zA-Z-_.]+)/.*`)
 
 type ociHelmGenerator struct {
 	config *types.HelmChart

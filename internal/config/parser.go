@@ -6,10 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 )
-
-var placeholderPattern = regexp.MustCompile(`\$\s*\{env:([^:]+):?(.*?)\}`)
 
 func IsConfigFile(filePath string) bool {
 	content, err := os.ReadFile(filePath)
@@ -23,10 +20,7 @@ func IsConfigFile(filePath string) bool {
 		return false
 	}
 	kind := contentObject["kind"]
-	if kind == "KrmGen" {
-		return true
-	}
-	return false
+	return kind == "KrmGen"
 }
 
 // ReadSkipPatterns scans srcDir (non-recursively) for KrmGen config files and

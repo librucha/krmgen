@@ -6,7 +6,7 @@ import (
 	"regexp"
 )
 
-var helmUrlRegexp = regexp.MustCompile("\\w+://([0-9a-zA-Z-_]+).*")
+var helmUrlRegexp = regexp.MustCompile(`\w+://([0-9a-zA-Z-_]+).*`)
 
 type repoHelmGenerator struct {
 	config *types.HelmChart
