@@ -10,13 +10,22 @@ import (
 )
 
 // The golden files under fixtures/*/golden.yaml are byte-for-byte captures
-// of krmgen's output, which in turn depends on the exact helm and kubectl
-// (Kustomize) versions used to render it — see docs/specification.md,
-// "Known differences between helm versions". Regenerating goldens for every
-// supported tool version is not the goal: krmgen's support matrix (helm
-// 3.8.0+, including 4.x) stays as documented, but the goldens themselves are
-// anchored to one reference pair, chosen as whatever was installed on the
-// machine that generated them.
+// of krmgen's output, which in turn depends on the exact helm version used
+// to render it — see docs/specification.md, "Known differences between helm
+// versions". On the default kustomize path, rendering behaviour is pinned to
+// the sigs.k8s.io/kustomize/api version compiled into krmgen (see
+// anchorKustomizeAPIVersion and TestEmbeddedKustomizeMatchesTheAnchor,
+// below), not to whatever kubectl happens to embed. The installed kubectl's
+// Kustomize version still has to match a reference too, because the same
+// goldens are also asserted against the external backend
+// (KRMGEN_KUBECTL_EXECUTABLE) by TestGolden_ExternalBackendMatchesTheGoldens
+// and compared against the embedded backend by TestGolden_BothBackendsAgree
+// and TestGolden_BothBackendsAgreeOnErrors — see docs/specification.md,
+// "Kustomize version follows kubectl — external backend only". Regenerating
+// goldens for every supported tool version is not the goal: krmgen's support
+// matrix (helm 3.8.0+, including 4.x) stays as documented, but the goldens
+// themselves are anchored to one reference pair, chosen as whatever was
+// installed on the machine that generated them.
 //
 // anchorHelmVersion is the `helm version --short` output of that reference
 // helm (a released v4.2.4 build; the "+g..." suffix is helm's normal
@@ -24,9 +33,11 @@ import (
 const anchorHelmVersion = "v4.2.4+g3900f43"
 
 // anchorKustomizeVersion is the "Kustomize Version" line reported by
-// `kubectl version --client` for the reference kubectl (v1.36.3), which is
-// what actually determines kustomize's rendering behaviour — see
-// docs/specification.md, "Kustomize version follows kubectl".
+// `kubectl version --client` for the reference kubectl (v1.36.3). It only
+// determines rendering behaviour on the external backend
+// (KRMGEN_KUBECTL_EXECUTABLE); the default path is pinned to
+// anchorKustomizeAPIVersion instead — see docs/specification.md, "Kustomize
+// version follows kubectl — external backend only".
 const anchorKustomizeVersion = "v5.8.1"
 
 var (

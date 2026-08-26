@@ -183,6 +183,14 @@ error: unable to find one of 'kustomization.yaml', 'kustomization.yml' or
 'Kustomization' in directory '<workDir>'
 ```
 
+That is the external backend's wording. The default embedded backend reports
+the same underlying kustomize error without the `error: ` prefix, wrapped in
+its own text:
+
+```
+run kustomize failed: unable to find one of 'kustomization.yaml', 'kustomization.yml' or 'Kustomization' in directory '<workDir>'
+```
+
 Exit code 1. In practice a kustomization must sit at the top level of the source
 directory; nesting it silently costs a run rather than being rejected up front.
 
@@ -640,15 +648,22 @@ Both kustomize backends are required to render byte-identical output on
 every scenario that renders successfully, and `TestGolden_BothBackendsAgree`
 (`test/golden/harness_test.go`) enforces it for every such scenario the golden
 suite covers: `kustomize-only`, `helm-with-kustomize`, `kustomize-features`.
-The three scenarios that end in a kustomize error —
-`multi-config-kustomize`, `two-kustomizations`, and `nested-kustomization` —
-cannot be compared that way: stderr carries a temporary directory path that
-differs between runs, and the external backend wraps the underlying
-kustomize error in its own "run kubectl kustomize failed" text where the
-embedded backend does not. For those, `TestGolden_BothBackendsAgreeOnErrors`
-requires the same exit code and the same stable substring in stderr instead
-of byte-identical stderr. Both backends were found to raise the same
-underlying kustomize error in all three cases.
+Two scenarios that end in a kustomize error — `multi-config-kustomize` and
+`nested-kustomization` — cannot be compared that way: stderr carries a
+temporary directory path that differs between runs, and the external backend
+wraps the underlying kustomize error in its own "run kubectl kustomize
+failed" text where the embedded backend does not. For those,
+`TestGolden_BothBackendsAgreeOnErrors` requires the same exit code and the
+same stable substring in stderr instead of byte-identical stderr. Both
+backends were found to raise the same underlying kustomize error in both
+cases.
+
+A third error scenario, `two-kustomizations`, is deliberately not part of
+this comparison: `FindKustomizeFile` (`internal/kustomize/processor.go`)
+fails on seeing multiple kustomization files before `BuildKustomize` ever
+selects a backend, so that scenario never reaches either backend's code path
+and says nothing about backend parity. `TestError_TwoKustomizations`
+(`test/golden/errors_test.go`) covers it instead.
 
 The one thing that differs between the backends is the version: the external
 path renders with whatever kustomize the installed kubectl embeds, which on
