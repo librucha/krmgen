@@ -58,7 +58,7 @@ func BuildKustomize(kustomizeFile string, workDir string, resources string) stri
 	}
 	prepareKustomizeFile(kustomizeFile, resourcesFile, workDir)
 
-	out, err := newKubectlBuilder("kubectl").Build(workDir)
+	out, err := selectBuilder().Build(workDir)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}

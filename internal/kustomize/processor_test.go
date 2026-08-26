@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	cons "github.com/librucha/krmgen/internal/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -107,6 +108,14 @@ func TestFindKustomizeFile_MultipleFilesIsFatal(t *testing.T) {
 }
 
 func TestBuildKustomize_AppendsResourcesAndInvokesKubectl(t *testing.T) {
+	// Force the external backend: with no executable configured,
+	// selectBuilder now defaults to the embedded library, which never calls
+	// runCommand. This test covers two things - that the working directory
+	// is prepared on disk (true for both backends) and that kubectl is
+	// invoked correctly (true only for the external one) - so it needs the
+	// external backend selected to stay meaningful.
+	t.Setenv(cons.EnvKubectlExecutable, "kubectl")
+
 	dir := t.TempDir()
 	kustomizeFile := filepath.Join(dir, "kustomization.yaml")
 	if err := os.WriteFile(kustomizeFile, []byte("kind: Kustomization\nresources:\n  - existing.yaml\n"), 0600); err != nil {

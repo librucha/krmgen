@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	cons "github.com/librucha/krmgen/internal/utils"
 )
 
 func TestKubectlBuilder_InvokesTheBinaryWithTheDirectory(t *testing.T) {
@@ -124,5 +126,33 @@ func TestKrustyBuilder_ReportsAMissingKustomization(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unable to find one of 'kustomization.yaml'") {
 		t.Errorf("error = %v, want the same wording kubectl reports", err)
+	}
+}
+
+func TestSelectBuilder_EmbeddedByDefault(t *testing.T) {
+	t.Setenv(cons.EnvKubectlExecutable, "")
+	os.Unsetenv(cons.EnvKubectlExecutable)
+
+	if got := selectBuilder().Name(); got != "embedded kustomize" {
+		t.Errorf("selectBuilder() = %q, want the embedded backend when no executable is configured", got)
+	}
+}
+
+func TestSelectBuilder_ExternalWhenConfigured(t *testing.T) {
+	t.Setenv(cons.EnvKubectlExecutable, "/opt/bin/kubectl")
+
+	got := selectBuilder().Name()
+	if !strings.Contains(got, "/opt/bin/kubectl") {
+		t.Errorf("selectBuilder() = %q, want the configured binary", got)
+	}
+}
+
+func TestSelectBuilder_EmptyValueMeansEmbedded(t *testing.T) {
+	// An exported-but-empty variable is a configuration accident, not a
+	// request for the external tool.
+	t.Setenv(cons.EnvKubectlExecutable, "")
+
+	if got := selectBuilder().Name(); got != "embedded kustomize" {
+		t.Errorf("selectBuilder() = %q, want the embedded backend for an empty value", got)
 	}
 }
