@@ -4,7 +4,7 @@
 
 `krmgen` is a CLI tool for generating Kubernetes Resource Model (KRM) YAML from Helm charts and Kustomize configs. It is written in Go (module `github.com/librucha/krmgen`).
 
-The core idea: take a `krmgen.yaml` config + optional `kustomization.yaml`, run `helm template` for every declared chart, optionally pipe the result through `kubectl kustomize`, and print the final YAML to stdout.
+The core idea: take a `krmgen.yaml` config + optional `kustomization.yaml`, run `helm template` for every declared chart, optionally pipe the result through kustomize (rendered by the embedded library by default, or by `kubectl kustomize` when `KRMGEN_KUBECTL_EXECUTABLE` is set), and print the final YAML to stdout.
 
 ## Architecture
 
@@ -28,7 +28,10 @@ internal/
     oci-generator.go    → OCI registry helm generator
     processor.go        → TemplateHelmCharts, runs `helm template` binary
   kustomize/
-    processor.go        → FindKustomizeFile, BuildKustomize (kubectl kustomize)
+    processor.go        → FindKustomizeFile, BuildKustomize (prepares the kustomization, then delegates to a Builder)
+    builder.go           → Builder interface, selectBuilder (embedded vs kubectl, keyed on KRMGEN_KUBECTL_EXECUTABLE)
+    builder_krusty.go     → embedded backend, sigs.k8s.io/kustomize/api (default)
+    builder_kubectl.go    → external backend, shells out to kubectl kustomize
   template/
     template.go         → EvalGoTemplates — registers all template funcs
     argocd/             → argocdEnv func (ARGOCD_ENV_* / ARGOCD_APP_* env vars)
@@ -95,7 +98,7 @@ and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx` without a direct
 | `KRMGEN_HELM_EXECUTABLE` | Override helm binary path |
 | `KRMGEN_HELM_USERNAME` | Helm repo username (fallback if not in config) |
 | `KRMGEN_HELM_PASSWORD` | Helm repo password (fallback if not in config) |
-| `KRMGEN_KUBECTL_EXECUTABLE` | Declared but not implemented — kubectl is always invoked from PATH (see specification) |
+| `KRMGEN_KUBECTL_EXECUTABLE` | Opt into the external kubectl backend for kustomize: that path is used as kubectl. Unset (the default) renders through the kustomize library compiled into krmgen instead (see specification) |
 
 ## Build & development
 

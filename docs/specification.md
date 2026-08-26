@@ -173,8 +173,8 @@ name inside the working directory and appended to that kustomization's `resource
 list. The generated filename must never appear in the output.
 
 **Known deviation:** the search is recursive but the build is not. Whichever
-kustomization the walk finds, krmgen always runs `kubectl kustomize` against the
-**root** of the working directory. A kustomization that lives only in a
+kustomization the walk finds, the selected backend (see Section 5) always
+builds against the **root** of the working directory. A kustomization that lives only in a
 subdirectory is therefore discovered, has the generated resource file appended
 to it, and then goes unused — the build fails at the root instead:
 
@@ -205,6 +205,13 @@ accumulating resources: accumulation err='merging resources from '<uuid>.yml': m
 not add resource with an already registered id: ConfigMap.v1.[noGrp]/<name>.[noNs]':
 must build at directory: '<workdir>/<uuid>.yml': file is not directory"
 ```
+
+The `run kubectl kustomize failed error: ...` wrapper shown above is the
+external backend's wording; the default embedded backend wraps the same
+underlying kustomize error differently, as `run kustomize failed: ...`. Both
+raise the same underlying kustomize error — verified by
+`TestGolden_BothBackendsAgreeOnErrors` (`test/golden/harness_test.go`), see
+Section 6.
 
 When the two passes' resources do **not** collide by identity, the run does
 not fail — it exits 0, but the second pass's output block silently includes
@@ -433,12 +440,22 @@ system-assigned equivalent.
 
 ## 5. External tool support matrix
 
-krmgen invokes `helm` and `kubectl` as external binaries. Which binary is used:
+krmgen invokes `helm` unconditionally as an external binary. `kubectl` is
+invoked as an external binary only when `KRMGEN_KUBECTL_EXECUTABLE` is set;
+otherwise kustomize renders through the library compiled into krmgen
+(`internal/kustomize/builder_krusty.go`, `internal/kustomize/builder.go`).
+Which binary is used:
 
 | Variable | Effect when set | Effect when unset |
 |---|---|---|
 | `KRMGEN_HELM_EXECUTABLE` | That path is used as helm | `helm` is looked up in `PATH` |
-| `KRMGEN_KUBECTL_EXECUTABLE` | **Not implemented.** Declared but never read | `kubectl` is looked up in `PATH` |
+| `KRMGEN_KUBECTL_EXECUTABLE` | That path is used as kubectl, and kustomize rendering goes through it | The kustomize version compiled into krmgen renders |
+
+krmgen embeds `sigs.k8s.io/kustomize/api` v0.21.1 (pinned in `go.mod`).
+Parity between the embedded backend and the external `kubectl` backend — see
+Section 6 — is enforced by `TestGolden_BothBackendsAgree` and
+`TestGolden_BothBackendsAgreeOnErrors` (`test/golden/harness_test.go`) and was
+last verified against kubectl v1.36.3, which embeds Kustomize v5.8.1.
 
 ### Invocation
 
@@ -544,11 +561,14 @@ passes predates it — but that combination is untested and unsupported.
 Tiller, which is a different architecture from the offline rendering this
 document specifies; it reached end of life in November 2020.
 
-**The kubectl floor is set by your kustomization, not by krmgen.** krmgen invokes
-only `kubectl kustomize <dir>`, a subcommand available since kubectl 1.14. Which
-kustomization features work is decided by the Kustomize version embedded in the
-kubectl you install — see "Kustomize version follows kubectl" below. Only the
-version in the table above has been verified.
+**The kubectl floor applies only to the external backend.** When
+`KRMGEN_KUBECTL_EXECUTABLE` is set, krmgen invokes `kubectl kustomize <dir>`, a
+subcommand available since kubectl 1.14, and which kustomization features work
+is decided by the Kustomize version that kubectl ships — see "Kustomize
+version follows kubectl" below. Only the version in the table above has been
+verified. Without that variable set, kustomize renders through the library
+compiled into krmgen (Section 5), whose version is pinned in `go.mod` and does
+not depend on the host's kubectl at all.
 
 ### Known differences between helm versions
 
@@ -574,10 +594,12 @@ ordinary helm-version rendering noise unrelated to the OCI banner (both
 outputs are otherwise line-for-line the same), and is not something krmgen
 processes or strips.
 
-**Kustomize version follows kubectl.** The embedded Kustomize version is whatever
-the installed kubectl ships. Two hosts with different kubectl versions can produce
-different output from the same input. This is the primary reason the refactoring
-plan moves to a pinned library.
+**Kustomize version follows kubectl — external backend only.** When
+`KRMGEN_KUBECTL_EXECUTABLE` is set, the Kustomize version used is whatever the
+installed kubectl ships. Two hosts with different kubectl versions can produce
+different output from the same input on that path. This was the primary
+motivation for adding the embedded backend (Section 5), which pins its
+kustomize version in `go.mod` instead and is the default since this phase.
 
 **`.Capabilities` is whatever the invoked helm defaults to.** krmgen never
 passes `--kube-version` or `--api-versions` (see Invocation, above), so a
@@ -613,6 +635,24 @@ treated as a defect:
 
 Users depending on helm plugins or post-renderers must set
 `KRMGEN_HELM_EXECUTABLE` and keep the external backend.
+
+Both kustomize backends are required to render byte-identical output on
+every scenario that renders successfully, and `TestGolden_BothBackendsAgree`
+(`test/golden/harness_test.go`) enforces it for every scenario the golden
+suite covers. The two scenarios that end in a kustomize error —
+`multi-config-kustomize` and `two-kustomizations` — cannot be compared that
+way: stderr carries a temporary directory path that differs between runs, and
+the external backend wraps the underlying kustomize error in its own "run
+kubectl kustomize failed" text where the embedded backend does not. For those,
+`TestGolden_BothBackendsAgreeOnErrors` requires the same exit code and the
+same stable substring in stderr instead of byte-identical stderr. Both
+backends were found to raise the same underlying kustomize error in both
+cases.
+
+The one thing that differs between the backends is the version: the external
+path renders with whatever kustomize the installed kubectl embeds, which on
+an older host may be far behind the pinned one. That is the trade the option
+exists to make.
 
 ## 7. Non-goals
 

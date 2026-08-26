@@ -407,6 +407,53 @@ func TestGolden_BothBackendsAgree(t *testing.T) {
 	}
 }
 
+// TestGolden_BothBackendsAgreeOnErrors extends the differential comparison to
+// the two scenarios that end in a kustomize error (see errors_test.go).
+// Full stderr cannot be compared byte-for-byte the way TestGolden_BothBackendsAgree
+// compares stdout: it embeds a temp directory path that differs on every run,
+// and the external backend wraps the underlying kustomize error in its own
+// "run kubectl kustomize failed" text. So this checks what actually needs to
+// match for the two backends to be interchangeable on an error path: the exit
+// code, and the same stable substring errors_test.go already asserts on for
+// each scenario.
+func TestGolden_BothBackendsAgreeOnErrors(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required to compare backends: %v", err)
+	}
+
+	cases := []struct {
+		name         string
+		wantExit     int
+		stableSubstr string
+	}{
+		// Substrings match the ones TestError_TwoKustomizations and
+		// TestError_MultiConfigWithKustomization assert on in errors_test.go.
+		{name: "two-kustomizations", wantExit: 1, stableSubstr: "multiple kustomization files"},
+		{name: "multi-config-kustomize", wantExit: 1, stableSubstr: "already registered id"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			embedded := runScenario(t, tc.name)
+			if embedded.exitCode != tc.wantExit {
+				t.Fatalf("embedded backend exit code = %d, want %d\nstderr: %s", embedded.exitCode, tc.wantExit, embedded.stderr)
+			}
+			if !strings.Contains(embedded.stderr, tc.stableSubstr) {
+				t.Fatalf("embedded backend stderr = %q, want it to contain %q", embedded.stderr, tc.stableSubstr)
+			}
+
+			external := runScenario(t, tc.name, "KRMGEN_KUBECTL_EXECUTABLE="+kubectlPath)
+			if external.exitCode != tc.wantExit {
+				t.Fatalf("external backend exit code = %d, want %d\nstderr: %s", external.exitCode, tc.wantExit, external.stderr)
+			}
+			if !strings.Contains(external.stderr, tc.stableSubstr) {
+				t.Fatalf("external backend stderr = %q, want it to contain %q", external.stderr, tc.stableSubstr)
+			}
+		})
+	}
+}
+
 // TestGolden_ExternalBackendMatchesTheGoldens keeps the external path honest:
 // the goldens are generated with whichever backend is default, so without
 // this the opt-in path could drift unnoticed.
