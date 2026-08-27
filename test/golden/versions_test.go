@@ -19,8 +19,13 @@ import (
 // default helm path since this phase: rendering behaviour is pinned to the
 // helm.sh/helm/v4 version compiled into krmgen (see anchorHelmLibraryVersion
 // and TestEmbeddedHelmMatchesTheAnchor, below), not to whatever helm binary
-// happens to be on PATH — anchorHelmVersion just below only governs the
-// external opt-in path (KRMGEN_HELM_EXECUTABLE). The two helm anchors agree
+// happens to be on PATH — anchorHelmVersion just below only governs *rendering
+// behaviour* on the external opt-in path (KRMGEN_HELM_EXECUTABLE). It is not
+// this narrowly scoped as a test gate, though: checkToolVersions runs
+// unconditionally from assertGolden, so every golden comparison - including
+// scenarios that never set KRMGEN_HELM_EXECUTABLE and render exclusively
+// through the embedded library - fails if the `helm` binary on PATH drifts
+// from anchorHelmVersion. The two helm anchors agree
 // today (both name v4.2.4) by coincidence, not by construction: nothing keeps
 // go.mod's helm.sh/helm/v4 dependency and the reference external binary in
 // lockstep. The installed kubectl's Kustomize version still has to match a

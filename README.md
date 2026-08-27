@@ -40,7 +40,9 @@ krmgen generate <path>
          │
          ▼
   2. Find krmgen.yaml  (kind: KrmGen)
-     Run `helm template` for each declared chart
+     Render each declared chart like `helm template` would
+     (embedded helm library by default, or the `helm` binary
+     when KRMGEN_HELM_EXECUTABLE is set)
          │
          ▼
   3. If kustomization.yaml exists:

@@ -547,21 +547,32 @@ against the reference external helm build named by `anchorHelmVersion`
 
 ### Invocation
 
-This is the command line krmgen actually builds for `helm template`
-(`templateHelm`, `internal/helm/processor.go:50-83`, plus each generator's
-`addRepoArgs`/`addCredentials`). Verified with a fake `helm` executable
-(pointed to via `KRMGEN_HELM_EXECUTABLE`) that logs its argv, for both
-backends, and cross-checked against real registries. This is the single most
-parity-critical fact in this document: phase 6's go/no-go for the embedded
-helm library is a measured-parity decision against this exact invocation.
+**This section describes the external binary backend only** (active when
+`KRMGEN_HELM_EXECUTABLE` is set). The embedded library backend never builds
+an argv at all — it drives the helm Go API directly (`sdkRenderer.Render`,
+`internal/helm/renderer_sdk.go`) — so nothing below applies to it.
+
+This is the command line krmgen builds for `helm template` on that backend
+(`binaryRenderer.Render`, `internal/helm/renderer_binary.go:18-55`, plus each
+generator's `addRepoArgs`/`addCredentials`). Verified with a fake `helm`
+executable (pointed to via `KRMGEN_HELM_EXECUTABLE`) that logs its argv, and
+cross-checked against real registries. This was the single most
+parity-critical fact during phase 6: the go/no-go decision for the embedded
+helm library was a measured-parity decision against this exact invocation
+(`TestGolden_BothHelmRenderersAgree`, `test/golden/harness_test.go`, which
+runs both backends against the same scenarios and requires byte-identical
+stdout). Phase 6 is complete; the embedded library has been the default
+since task 4 of that phase.
 
 **Argument order, both backends**, built in this sequence:
 
 1. `template`
-2. the release name (positional, **may be empty** — `config.ReleaseName` is
-   used as-is, with no validation; verified: an empty `releaseName` produces
-   `helm template  --include-crds ...` with an empty positional argument, and
-   helm accepts it)
+2. the release name (positional — `config.ReleaseName` is used as-is, with no
+   validation of its own; krmgen does still produce
+   `helm template  --include-crds ...` with an empty positional argument when
+   `releaseName` is unset, but helm does **not** accept it: measured on the
+   anchor v4.2.4 (`test/golden/versions_test.go`), both backends exit 1 with
+   `release name "": no name provided`)
 3. `--include-crds` — passed **unconditionally**, on every invocation,
    regardless of config
 4. `--version <version>`, only if `version` is set
@@ -571,7 +582,7 @@ helm library is a measured-parity decision against this exact invocation.
    suppressed
 8. `--values <file>` for `valuesFile` if set, **then** `--values <file>` for
    `valuesInline` if set — both flags appear when both fields are set, in
-   that order (`getValuesArgs`, `internal/helm/processor.go:116-136`); a
+   that order (`getValuesArgs`, `internal/helm/processor.go:84-94`); a
    `valuesInline` values file is a generated temp file, written into the
    working directory
 
@@ -597,16 +608,16 @@ helm template myrelease --include-crds --version 2.0.0 --namespace myns \
   --values /tmp/.../helm-values-myrelease-<uuid>
 ```
 
-**`--kube-version` and `--api-versions` are never passed**, on either
-backend — confirmed by reading `internal/helm/processor.go` and both
-generators, and by inspecting captured argv from the fake-helm shim across
-every scenario tested. `.Capabilities` inside chart templates therefore
+**`--kube-version` and `--api-versions` are never passed** on this backend —
+confirmed by reading `internal/helm/renderer_binary.go` and both generators,
+and by inspecting captured argv from the fake-helm shim across every scenario
+tested. `.Capabilities` inside chart templates therefore
 resolves to whatever the invoked helm binary defaults to for a client-only
 `template` run, which differs between helm versions and is not something
-krmgen controls or records. This is a named risk for phase 6 and is tracked
-under Known differences between helm versions, below.
+krmgen controls or records. This was a named risk during phase 6 and remains
+tracked under Known differences between helm versions, below.
 
-**Credentials.** `credentialsArgs` (`internal/helm/generator.go:52-72`) builds
+**Credentials.** `credentialsArgs` (`internal/helm/generator.go:89-99`) builds
 `--username <value> --password <value>` (either flag omitted if its value is
 empty) from, per field: `config.Username`/`config.Password` if set, else
 `KRMGEN_HELM_USERNAME`/`KRMGEN_HELM_PASSWORD`. Setting
@@ -667,9 +678,10 @@ not depend on the host's kubectl at all.
 **helm 4 writes OCI pull progress to stdout; krmgen strips it.** When a chart
 is pulled from an OCI registry, helm 4 prints `Pulled: <ref>` and
 `Digest: <sha256>` to **stdout**, ahead of the rendered manifests. helm 3 does
-not print these lines. krmgen removes this: `templateHelm` in
-`internal/helm/processor.go` passes helm's stdout through `stripHelmBanner`,
-which removes a **leading contiguous run** of lines starting with `Pulled: `,
+not print these lines. krmgen removes this: `binaryRenderer.Render`
+(`internal/helm/renderer_binary.go:54`) passes helm's stdout through
+`stripHelmBanner` (`internal/helm/renderer_binary.go:72`), which removes a
+**leading contiguous run** of lines starting with `Pulled: `,
 `Digest: `, `Signed by: ` or `Chart Hash Verified: `, stopping at the first
 line that does not match. Because only a leading run is removed, identical
 text appearing inside a rendered manifest (not at the very start of the
@@ -697,19 +709,29 @@ kustomize version in `go.mod` instead and is the default since this phase.
 passes `--kube-version` or `--api-versions` on the external path (see
 Invocation, above), and the embedded renderer (`sdkRenderer.Render`,
 `internal/helm/renderer_sdk.go`) never sets `action.Install.KubeVersion` /
-`.APIVersions` either — both leave the same two fields at their zero value.
+`.APIVersions` either. `KubeVersion` is left at its zero value on both
+backends. `.APIVersions` is not symmetric at the field level, though the end
+result still is: helm's own CLI (`pkg/cmd/template.go`) defaults its
+`--api-versions` flag to `[]string{}` and unconditionally assigns that to
+`client.APIVersions`, an empty but **non-nil** slice — the embedded renderer
+never touches the field, so it stays **nil**. This does not produce different
+`.Capabilities`: `action.Install.RunWithContext` (`pkg/action/install.go:336`)
+only does `i.cfg.Capabilities.APIVersions = append(i.cfg.Capabilities.APIVersions,
+i.APIVersions...)`, and appending an empty slice or a nil slice is the same
+no-op either way.
 The design doc named this a risk for phase 6 (`docs/superpowers/specs/2026-08-20-krmgen-refaktoring-design.md`,
 "Rizika a vědomé změny chování"): that an embedded library reimplementing
 helm's CLI might quietly default `.Capabilities` differently from the real
 `helm template` command. It does not: `pkg/cmd/template.go` and
 `internal/helm/renderer_sdk.go` both construct an `action.Install` and call
 its `RunWithContext` (`pkg/action/install.go`) — the *same* function, not a
-reimplementation — so leaving `KubeVersion`/`APIVersions` unset produces
-identical `.Capabilities` defaults on both backends whenever they run the same
-helm version, confirmed by reading `helm.sh/helm/v4@v4.2.4`'s
-`pkg/cmd/template.go` and `pkg/action/install.go` side by side. No golden
-fixture exercises this directly — none of the demo charts read
-`.Capabilities` — so this is a code-reading confirmation, not a test result.
+reimplementation — so leaving `KubeVersion`/`APIVersions` unset (or set to an
+empty slice, on the CLI side) produces identical `.Capabilities` defaults on
+both backends whenever they run the same helm version, confirmed by reading
+`helm.sh/helm/v4@v4.2.4`'s `pkg/cmd/template.go` and `pkg/action/install.go`
+side by side. No golden fixture exercises this directly — none of the demo
+charts read `.Capabilities` — so this is a code-reading confirmation, not a
+test result.
 
 The risk that remains, and always did, is across *different* helm versions: a
 chart that branches on `.Capabilities.KubeVersion` or `.Capabilities.APIVersions`
