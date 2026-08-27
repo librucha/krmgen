@@ -50,75 +50,7 @@ func TemplateHelmCharts(helmConfig *types.Helm, workDir string) (string, error) 
 }
 
 func templateHelm(generator generator, workDir string) (string, error) {
-	config := generator.getConfig()
-
-	args := []string{
-		"template",
-		config.ReleaseName,
-		"--include-crds",
-	}
-	if config.Version != "" {
-		args = append(args, "--version", config.Version)
-	}
-	if config.Namespace != "" {
-		args = append(args, "--namespace", config.Namespace)
-	}
-
-	args = generator.addRepoArgs(args)
-
-	if credentialsProvided(generator.getConfig()) {
-		if err := generator.login(); err != nil {
-			return "", err
-		}
-		args = generator.addCredentials(args)
-	}
-
-	valuesArgs, err := getValuesArgs(config, workDir)
-	if err != nil {
-		return "", err
-	}
-	args = append(args, valuesArgs...)
-
-	executable, err := helmExecutable()
-	if err != nil {
-		return "", err
-	}
-	stdOut, stdErr, err := runCommand(executable, args...)
-	if err != nil {
-		return "", fmt.Errorf("run command %q finished with error %v. Error output %v", executable, err, stdErr)
-	}
-	return stripHelmBanner(stdOut), nil
-}
-
-// helmBannerPrefixes are informational lines Helm v4 writes to stdout (not stderr)
-// before the rendered manifests when a chart is pulled from an OCI registry.
-// They are not valid YAML and break downstream processing (e.g. kustomize).
-var helmBannerPrefixes = []string{
-	"Pulled: ",
-	"Digest: ",
-	"Signed by: ",
-	"Chart Hash Verified: ",
-}
-
-// stripHelmBanner removes the Helm banner lines from the beginning of helm template output.
-func stripHelmBanner(output string) string {
-	for {
-		line, rest, _ := strings.Cut(output, "\n")
-		if !isHelmBannerLine(line) {
-			return output
-		}
-		output = rest
-	}
-}
-
-func isHelmBannerLine(line string) bool {
-	line = strings.TrimSuffix(line, "\r")
-	for _, prefix := range helmBannerPrefixes {
-		if strings.HasPrefix(line, prefix) {
-			return true
-		}
-	}
-	return false
+	return selectRenderer().Render(generator.getConfig(), generator, workDir)
 }
 
 func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
