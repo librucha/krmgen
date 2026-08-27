@@ -59,7 +59,13 @@ func TestError_MissingPathArgument(t *testing.T) {
 	}
 	// The specification promises a failing run prints no usage block. Cobra
 	// dumps one on every RunE error unless SilenceUsage is set, so this is
-	// the assertion that keeps that setting from being dropped by accident.
+	// the assertion that keeps that setting from being dropped from
+	// cmd/root.go by accident. It only guards the root command's setting:
+	// cobra suppresses the usage block when either the root's or the
+	// executed subcommand's SilenceUsage is true (see (*Command).Execute in
+	// spf13/cobra), so removing the (redundant) SilenceUsage on
+	// cmd/generate.go's own command would not make this test fail - the
+	// root's setting alone still silences it.
 	if strings.Contains(res.stderr, "Usage:") || strings.Contains(res.stdout, "Usage:") {
 		t.Errorf("want no usage block on a failure\nstderr: %s\nstdout: %s", res.stderr, res.stdout)
 	}

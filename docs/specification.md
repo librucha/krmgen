@@ -275,7 +275,10 @@ already succeeded stays a success — but it is not silent either: krmgen
 prints a stderr warning naming the path left behind, since it may still hold
 rendered secrets.
 Everything krmgen writes *inside* that directory — copied and template-evaluated
-files, and any subdirectories created while copying the source tree — is
+files, any subdirectories created while copying the source tree, per-chart
+`helm-values-<release>-<uuid>` files generated from `valuesInline`
+(`internal/helm/processor.go`), and the `<uuid>.yml` file kustomize's resources
+are collected into (`internal/kustomize/processor.go`) — is
 likewise restricted to the owning user: subdirectories are created with mode
 0700 and files with mode 0600 (`cons.DirPerm` / `cons.FilePerm`,
 `internal/utils/perm.go`), because those files may hold rendered templates,
@@ -503,6 +506,10 @@ Which binary is used:
 |---|---|---|
 | `KRMGEN_HELM_EXECUTABLE` | That path is used as helm | `helm` is looked up in `PATH` |
 | `KRMGEN_KUBECTL_EXECUTABLE` | That path is used as kubectl, and kustomize rendering goes through it | The kustomize version compiled into krmgen renders |
+
+`KRMGEN_HELM_EXECUTABLE` set to the empty string is treated the same as unset —
+`helm` is still looked up in `PATH` (`internal/helm/processor.go:17`), consistent
+with how `selectBuilder` treats an empty `KRMGEN_KUBECTL_EXECUTABLE`.
 
 krmgen embeds `sigs.k8s.io/kustomize/api` v0.21.1 (pinned in `go.mod`).
 Parity between the embedded backend and the external `kubectl` backend — see

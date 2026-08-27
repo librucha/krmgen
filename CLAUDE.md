@@ -43,6 +43,7 @@ internal/
      github.com/librucha/cloud-go-templates dependency, not from this repo)
   tool/tool.go          → RunCommand wrapper for external binaries
   utils/constants.go    → env var name constants
+  utils/perm.go         → FilePerm / DirPerm — modes for rendered working files and directories
 
 version/version.go      → AppVersion global var set at build time
 
