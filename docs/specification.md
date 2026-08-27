@@ -255,7 +255,10 @@ The working directory is created under the system temp directory with mode 0700
 (via `os.MkdirTemp`, which applies that mode itself) and removed when the run
 ends, whether it succeeds or fails. As of phase 5, cleanup is registered as
 soon as the directory exists, so a failure partway through rendering no longer
-leaves the working directory — including any rendered secrets — on disk.
+leaves the working directory — including any rendered secrets — on disk. This
+is covered by `TestError_WorkingDirectoryRemovedOnFailure`
+(`test/golden/errors_test.go`), which runs a failing scenario under its own
+`TMPDIR` and asserts no `krmgen*` directory remains in it.
 Everything krmgen writes *inside* that directory — copied and template-evaluated
 files, and any subdirectories created while copying the source tree — is
 likewise restricted to the owning user: subdirectories are created with mode

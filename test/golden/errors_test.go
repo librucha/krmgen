@@ -1,6 +1,7 @@
 package golden
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -15,6 +16,29 @@ func TestError_TwoKustomizations(t *testing.T) {
 	}
 	if res.stdout != "" {
 		t.Errorf("stdout = %q, want nothing on a failure", res.stdout)
+	}
+}
+
+// TestError_WorkingDirectoryRemovedOnFailure covers what used to be a
+// documented deviation: log.Fatal skipped the deferred cleanup, so a failing
+// run left a working directory full of rendered templates behind. The run is
+// given a TMPDIR of its own so nothing else on the host can be mistaken for
+// krmgen's leftovers.
+func TestError_WorkingDirectoryRemovedOnFailure(t *testing.T) {
+	tmp := t.TempDir()
+	res := runScenario(t, "two-kustomizations", "TMPDIR="+tmp)
+	if res.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1\nstderr: %s", res.exitCode, res.stderr)
+	}
+
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "krmgen") {
+			t.Errorf("working directory %q survived a failed run", e.Name())
+		}
 	}
 }
 
