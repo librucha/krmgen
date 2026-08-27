@@ -8,23 +8,51 @@ import (
 	"testing"
 )
 
+// TestCopiedFilesAreNotWorldReadable covers every way krmgen puts something
+// into its working directory: a template-evaluated file, a file copied as-is
+// because it matches a skip pattern, and the directories it creates on the
+// way. All three can carry or expose rendered secrets, and each is written by
+// a different call, so one assertion would not cover the others.
 func TestCopiedFilesAreNotWorldReadable(t *testing.T) {
 	src := t.TempDir()
 	if err := os.WriteFile(filepath.Join(src, "krmgen.yaml"), []byte("kind: KrmGen\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	workDir, err := copySrcDir(src, nil)
+	nested := filepath.Join(src, "certs", "prod")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberately not valid Go template syntax: it must reach the working
+	// directory untouched, through the skip branch rather than the eval one.
+	if err := os.WriteFile(filepath.Join(nested, "client.pfx"), []byte("{{ not a template"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	workDir, err := copySrcDir(src, []string{"*.pfx"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
 
-	info, err := os.Stat(filepath.Join(workDir, "krmgen.yaml"))
-	if err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		what string
+		path string
+		want os.FileMode
+	}{
+		{what: "template-evaluated file", path: "krmgen.yaml", want: 0600},
+		{what: "skipped file copied as-is", path: filepath.Join("certs", "prod", "client.pfx"), want: 0600},
+		{what: "created directory", path: "certs", want: 0700},
+		{what: "created nested directory", path: filepath.Join("certs", "prod"), want: 0700},
 	}
-	if perm := info.Mode().Perm(); perm != 0600 {
-		t.Errorf("copied file mode = %04o, want 0600 - it may hold rendered secrets", perm)
+	for _, tc := range cases {
+		info, err := os.Stat(filepath.Join(workDir, tc.path))
+		if err != nil {
+			t.Errorf("%s: %v", tc.what, err)
+			continue
+		}
+		if perm := info.Mode().Perm(); perm != tc.want {
+			t.Errorf("%s (%s) mode = %04o, want %04o - it may hold rendered secrets", tc.what, tc.path, perm, tc.want)
+		}
 	}
 }
 
