@@ -142,7 +142,11 @@ Required external tools: `helm` (in PATH or configured via `KRMGEN_HELM_EXECUTAB
   concurrent use. See
   [`docs/specification.md`](docs/specification.md#4-template-functions),
   Caching, for details
-- `log.Fatal` used throughout (process exits on any error — intentional for a CLI tool)
+- Production code returns errors up the call stack instead of calling `log.Fatal`; cobra prints the
+  returned error to stderr (`Error: ...`) and `main` (`krmgen.go`) exits with code 1. Informational
+  `log.Println` calls (e.g. `internal/config/parser.go` on an unreadable file) still stay — only
+  fatal exits were replaced. `cmd/only-test/run.go` is a development utility outside the shipped
+  binary (`.goreleaser.yaml` builds `main: .`) and keeps its two `log.Fatal` calls.
 
 ## Specification
 
