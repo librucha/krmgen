@@ -43,10 +43,10 @@ or other commands.
 | 0 | Rendering succeeded; YAML written to stdout |
 | 1 | Any error: missing argument, unreadable path, template failure, helm or kustomize failure |
 
-A failure to remove the working directory during cleanup does not by itself change
-the exit code: it is reported as a stderr warning (see Working directory lifecycle,
-below), not promoted to a returned error. It changes exit 0 to exit 1 only when it
-happens to accompany a render that already failed for its own reason.
+A failure to remove the working directory during cleanup never affects the exit
+code. It is reported as a stderr warning (see Working directory lifecycle, below),
+not promoted to a returned error, so a run that rendered successfully still exits 0
+and a run that failed still exits 1 for its own reason.
 
 krmgen currently does not distinguish error classes by exit code. Callers must not
 rely on a specific non-zero value beyond "non-zero means failure".
