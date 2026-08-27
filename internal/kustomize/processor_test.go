@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	cons "github.com/librucha/krmgen/internal/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 func TestUnwrapResources(t *testing.T) {
@@ -61,7 +60,10 @@ func TestFindKustomizeFile(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got := FindKustomizeFile(dir)
+			got, err := FindKustomizeFile(dir)
+			if err != nil {
+				t.Fatalf("FindKustomizeFile: %v", err)
+			}
 			if tt.wantBase == "" {
 				if got != "" {
 					t.Errorf("FindKustomizeFile() = %q, want empty", got)
@@ -75,23 +77,7 @@ func TestFindKustomizeFile(t *testing.T) {
 	}
 }
 
-// captureFatal redirects logrus' exit so a log.Fatalf in production code
-// aborts the call under test instead of the test binary.
-func captureFatal(t *testing.T, call func()) (fatal bool) {
-	t.Helper()
-	original := log.StandardLogger().ExitFunc
-	t.Cleanup(func() { log.StandardLogger().ExitFunc = original })
-	log.StandardLogger().ExitFunc = func(int) { panic("log.Fatal") }
-	defer func() {
-		if r := recover(); r != nil {
-			fatal = true
-		}
-	}()
-	call()
-	return false
-}
-
-func TestFindKustomizeFile_MultipleFilesIsFatal(t *testing.T) {
+func TestFindKustomizeFile_MultipleFilesIsError(t *testing.T) {
 	dir := t.TempDir()
 	for _, f := range []string{"kustomization.yaml", "nested/kustomization.yaml"} {
 		path := filepath.Join(dir, f)
@@ -102,8 +88,8 @@ func TestFindKustomizeFile_MultipleFilesIsFatal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if !captureFatal(t, func() { FindKustomizeFile(dir) }) {
-		t.Error("expected two kustomization files to be fatal, but the call returned")
+	if _, err := FindKustomizeFile(dir); err == nil {
+		t.Error("want an error for two kustomization files")
 	}
 }
 
@@ -131,7 +117,10 @@ func TestBuildKustomize_AppendsResourcesAndInvokesKubectl(t *testing.T) {
 		return "rendered: true\n", "", nil
 	}
 
-	got := BuildKustomize(kustomizeFile, dir, "kind: ConfigMap\n")
+	got, err := BuildKustomize(kustomizeFile, dir, "kind: ConfigMap\n")
+	if err != nil {
+		t.Fatalf("BuildKustomize: %v", err)
+	}
 
 	if got != "rendered: true\n" {
 		t.Errorf("BuildKustomize() = %q, want the kubectl output", got)

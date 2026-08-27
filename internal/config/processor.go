@@ -16,11 +16,12 @@ func ProcessConfig(config *types.Config, workDir string) (string, error) {
 		}
 		resources.WriteString(helmCharts)
 	}
-	kustomizeFile := kustomize.FindKustomizeFile(workDir)
+	kustomizeFile, err := kustomize.FindKustomizeFile(workDir)
+	if err != nil {
+		return "", err
+	}
 	if kustomizeFile != "" {
-		kustomizeResources := kustomize.BuildKustomize(kustomizeFile, workDir, resources.String())
-		resources.Reset()
-		resources.WriteString(kustomizeResources)
+		return kustomize.BuildKustomize(kustomizeFile, workDir, resources.String())
 	}
 
 	return resources.String(), nil
