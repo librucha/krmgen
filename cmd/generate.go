@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/librucha/krmgen/internal/config"
 	"github.com/librucha/krmgen/internal/template"
+	cons "github.com/librucha/krmgen/internal/utils"
 	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
@@ -110,7 +111,7 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 		srcPath := filepath.Join(srcDir, entry.Name())
 		dstPath := filepath.Join(dstDir, entry.Name())
 		if entry.IsDir() {
-			if err := os.MkdirAll(dstPath, 0750); err != nil {
+			if err := os.MkdirAll(dstPath, cons.DirPerm); err != nil {
 				return fmt.Errorf("creating directory %s failed error: %w", dstPath, err)
 			}
 			if err := copyDir(srcPath, dstPath, baseDir, skipPatterns); err != nil {
@@ -125,7 +126,7 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 		}
 		relPath, _ := filepath.Rel(baseDir, srcPath)
 		if matchesSkipPattern(relPath, skipPatterns) {
-			if err := os.WriteFile(dstPath, fileContent, os.ModePerm); err != nil {
+			if err := os.WriteFile(dstPath, fileContent, cons.FilePerm); err != nil {
 				return fmt.Errorf("writing file %s failed error: %w", srcPath, err)
 			}
 		} else {
@@ -134,7 +135,7 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 			if err != nil {
 				return fmt.Errorf("template evaluation of file %s failed error: %w", srcPath, err)
 			}
-			if err := os.WriteFile(dstPath, []byte(evaluated), os.ModePerm); err != nil {
+			if err := os.WriteFile(dstPath, []byte(evaluated), cons.FilePerm); err != nil {
 				return fmt.Errorf("writing evaluated file %s failed error: %w", srcPath, err)
 			}
 		}

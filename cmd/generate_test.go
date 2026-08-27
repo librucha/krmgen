@@ -8,6 +8,26 @@ import (
 	"testing"
 )
 
+func TestCopiedFilesAreNotWorldReadable(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "krmgen.yaml"), []byte("kind: KrmGen\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	workDir, err := copySrcDir(src, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
+
+	info, err := os.Stat(filepath.Join(workDir, "krmgen.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Errorf("copied file mode = %04o, want 0600 - it may hold rendered secrets", perm)
+	}
+}
+
 func TestMatchesSkipPattern(t *testing.T) {
 	tests := []struct {
 		name     string

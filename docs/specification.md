@@ -252,10 +252,19 @@ file when a kustomization file is also present, until this is addressed.
 ### Working directory lifecycle
 
 The working directory is created under the system temp directory with mode 0700
-and removed when the run ends, whether it succeeds or fails. As of phase 5,
-cleanup is registered as soon as the directory exists, so a failure partway
-through rendering no longer leaves the working directory — including any
-rendered secrets — on disk.
+(via `os.MkdirTemp`, which applies that mode itself) and removed when the run
+ends, whether it succeeds or fails. As of phase 5, cleanup is registered as
+soon as the directory exists, so a failure partway through rendering no longer
+leaves the working directory — including any rendered secrets — on disk.
+Everything krmgen writes *inside* that directory — copied and template-evaluated
+files, and any subdirectories created while copying the source tree — is
+likewise restricted to the owning user: subdirectories are created with mode
+0700 and files with mode 0600 (`cons.DirPerm` / `cons.FilePerm`,
+`internal/utils/perm.go`), because those files may hold rendered templates,
+including secrets pulled from a key vault by the `azSec` family of functions.
+Before phase 5, files were written with `os.ModePerm` (0777) or `0666`, and
+subdirectories with `0750` — world- or group-readable modes that a rendered
+secret should never have had.
 
 ## 4. Template functions
 

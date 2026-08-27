@@ -134,7 +134,7 @@ func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, 
 			return nil, err
 		}
 		valuesInlineFile := filepath.Join(workDir, "helm-values-"+helmChartConfig.ReleaseName+"-"+uuid.NewString())
-		err = os.WriteFile(valuesInlineFile, valuesInlineYaml, 0666)
+		err = os.WriteFile(valuesInlineFile, valuesInlineYaml, cons.FilePerm)
 		if err != nil {
 			return nil, err
 		}

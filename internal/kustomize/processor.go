@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/librucha/krmgen/internal/tool"
+	cons "github.com/librucha/krmgen/internal/utils"
 	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
@@ -52,7 +53,7 @@ func BuildKustomize(kustomizeFile string, workDir string, resources string) (str
 	var resourcesFile string
 	if resources != "" {
 		resourcesFile = filepath.Join(workDir, uuid.NewString()+".yml")
-		err := os.WriteFile(resourcesFile, []byte(resources), os.ModePerm)
+		err := os.WriteFile(resourcesFile, []byte(resources), cons.FilePerm)
 		if err != nil {
 			return "", fmt.Errorf("write file %qwith resources failed error: %w", resourcesFile, err)
 		}
@@ -97,7 +98,7 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 		if err != nil {
 			return fmt.Errorf("marshaling updated file content failed error: %w", err)
 		}
-		err = os.WriteFile(kustomizeFile, updatedFileContent, os.ModePerm)
+		err = os.WriteFile(kustomizeFile, updatedFileContent, cons.FilePerm)
 		if err != nil {
 			return fmt.Errorf("writing updated kustomize file %q failed error: %w", kustomizeFile, err)
 		}
