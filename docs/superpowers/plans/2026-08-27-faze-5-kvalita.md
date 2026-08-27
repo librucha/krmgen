@@ -471,7 +471,7 @@ textem, rekurzivní volání `copyDir` propaguje:
 
 ```go
 if entry.IsDir() {
-	if err := os.MkdirAll(dstPath, dirPerm); err != nil {
+	if err := os.MkdirAll(dstPath, 0750); err != nil {
 		return fmt.Errorf("creating directory %s failed error: %w", dstPath, err)
 	}
 	if err := copyDir(srcPath, dstPath, baseDir, skipPatterns); err != nil {
