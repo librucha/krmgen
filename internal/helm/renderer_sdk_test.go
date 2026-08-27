@@ -101,8 +101,9 @@ func TestSDKRendererMatchesTheBinary(t *testing.T) {
 // test in this repo would notice - no chart under test/golden/charts carries
 // a helm.sh/hook annotation except this one.
 //
-// The golden it compares against was captured through the binary path (the
-// still-default renderer, see selectRenderer), by building krmgen and
+// The golden it compares against was captured through the binary path - back
+// when that was still the default, before selectRenderer was flipped - by
+// building krmgen and
 // running `generate` against fixtures/helm-hooks by hand - not with
 // `go test -update`. That is what makes it evidence: this test asks the SDK
 // renderer to reproduce a rendering it took no part in producing.

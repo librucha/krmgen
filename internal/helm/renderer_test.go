@@ -1,6 +1,7 @@
 package helm
 
 import (
+	"os"
 	"testing"
 
 	cons "github.com/librucha/krmgen/internal/utils"
@@ -19,10 +20,15 @@ func TestSelectRenderer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.setEnv {
-				t.Setenv(cons.EnvHelmExecutable, tt.env)
-			} else {
-				t.Setenv(cons.EnvHelmExecutable, "")
+			// t.Setenv first so the cleanup restores whatever the host had,
+			// then genuinely unset it - otherwise the "unset" row would test
+			// the empty-string case and selectRenderer's found==false branch
+			// would never be entered by any unit test.
+			t.Setenv(cons.EnvHelmExecutable, tt.env)
+			if !tt.setEnv {
+				if err := os.Unsetenv(cons.EnvHelmExecutable); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if got := selectRenderer().Name(); got != tt.wantName {
 				t.Errorf("selectRenderer().Name() = %q, want %q", got, tt.wantName)
