@@ -1,6 +1,7 @@
 package kustomize
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/librucha/krmgen/internal/tool"
@@ -18,6 +19,12 @@ var allowedFileNames = map[string]any{"kustomization.yaml": nil, "kustomization.
 // without running the binary.
 var runCommand = tool.RunCommand
 
+// errMultipleKustomizeFiles is a sentinel used to tell "the walk callback
+// rejected what it found" apart from "the walk itself failed" (permission
+// errors, a vanished directory, ...). Only the latter gets wrapped as a
+// search failure below - the former is returned to the caller as-is.
+var errMultipleKustomizeFiles = errors.New("found multiple kustomization files")
+
 // FindKustomizeFile tries to find a kustomization file to build (see
 // selectBuilder for which backend does the building). It returns an empty
 // path and no error when the directory holds none, and an error when it
@@ -34,13 +41,16 @@ func FindKustomizeFile(workDir string) (string, error) {
 		_, ok := allowedFileNames[strings.ToLower(filepath.Base(path))]
 		if ok {
 			if kustomizeFile != "" {
-				return fmt.Errorf("found multiple kustomization files under: %s", workDir)
+				return fmt.Errorf("%w under: %s", errMultipleKustomizeFiles, workDir)
 			}
 			kustomizeFile = path
 		}
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, errMultipleKustomizeFiles) {
+			return "", err
+		}
 		return "", fmt.Errorf("search kustomize files failed. error: %w", err)
 	}
 	return kustomizeFile, nil

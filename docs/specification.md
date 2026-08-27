@@ -63,9 +63,15 @@ usage.` suggestion.
 
 Before phase 5 the format depended on which package raised the error - the
 kustomize processor used logrus (`time=... level=fatal msg="..."`) and the
-rest used the standard library's `log` (`2026/08/27 00:23:33 ...`). Message
-wording is otherwise unchanged by the switch; the one exception is a typo
-fix (`crating directory` to `creating directory`).
+rest used the standard library's `log` (`2026/08/27 00:23:33 ...`). Each
+individual message's wording is otherwise unchanged by the switch; the one
+exception is a typo fix (`crating directory` to `creating directory`). The
+stderr *line* changed more than that, though: every error that used to
+`log.Fatal` deep inside a call chain now gets wrapped once per layer it
+returns through, so what reaches stderr is a chain like
+`Error: processing config file <path> failed error: <cause>`, not just
+`<cause>` on its own. Only a caller matching on the innermost cause's
+substring is unaffected by that extra wrapping.
 
 Callers matching on stderr should match on the message, not on the line shape.
 
