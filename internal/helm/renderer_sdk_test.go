@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/cli"
+
 	types "github.com/librucha/krmgen/internal"
 )
 
@@ -137,5 +140,67 @@ func TestSDKRendererMatchesHooksGolden(t *testing.T) {
 	want := strings.TrimSuffix(string(golden), "\n")
 	if viaSDK != want {
 		t.Errorf("sdk renderer does not reproduce the binary-captured golden %s\nwant:\n%s\ngot:\n%s", goldenPath, want, viaSDK)
+	}
+}
+
+// TestSDKRendererOCI_UsesRegistryClientNotRepoURL pins the fix this task
+// makes: for an oci:// chart, Render must leave client.RepoURL empty and
+// pass cfg.RepoUrl itself as the chart name (mirroring what
+// ociHelmGenerator.addRepoArgs hands the binary renderer - see the comment
+// in renderer_sdk.go). Before the fix, RepoURL was set to the oci:// URL,
+// which routes helm's LocateChart through repo.FindChartInRepoURL - an HTTP
+// chart-repo index lookup that does not understand oci:// at all.
+//
+// This stays hermetic by overriding the locateChart seam
+// (internal/helm/renderer_sdk.go) with a stub that hands back a chart
+// packaged locally by `helm package` - no registry, real or fake, is ever
+// contacted.
+func TestSDKRendererOCI_UsesRegistryClientNotRepoURL(t *testing.T) {
+	chartSrc, err := filepath.Abs(filepath.Join("..", "..", "test", "golden", "charts", "demo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	pkg := exec.Command("helm", "package", chartSrc, "-d", dir)
+	if out, err := pkg.CombinedOutput(); err != nil {
+		t.Fatalf("helm package failed: %v\n%s", err, out)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("expected exactly one packaged chart in %s, got %v (err %v)", dir, entries, err)
+	}
+	chartPath := filepath.Join(dir, entries[0].Name())
+
+	cfg := &types.HelmChart{
+		Name: "demo", RepoUrl: "oci://registry.example.com/charts", ReleaseName: "rel",
+		Version: "0.1.0", Namespace: "default", IgnoreCredentials: true,
+	}
+	g, err := newGenerator(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var gotName, gotRepoURL string
+	original := locateChart
+	t.Cleanup(func() { locateChart = original })
+	locateChart = func(opts *action.ChartPathOptions, name string, _ *cli.EnvSettings) (string, error) {
+		gotName = name
+		gotRepoURL = opts.RepoURL
+		return chartPath, nil
+	}
+
+	out, err := newSDKRenderer().Render(cfg, g, t.TempDir())
+	if err != nil {
+		t.Fatalf("sdk renderer: %v", err)
+	}
+
+	if gotRepoURL != "" {
+		t.Errorf("RepoURL = %q, want empty for an oci:// chart", gotRepoURL)
+	}
+	if gotName != cfg.RepoUrl {
+		t.Errorf("chart reference passed to LocateChart = %q, want %q (cfg.RepoUrl)", gotName, cfg.RepoUrl)
+	}
+	if !strings.Contains(out, "kind:") {
+		t.Errorf("rendered output does not look like YAML: %q", out)
 	}
 }

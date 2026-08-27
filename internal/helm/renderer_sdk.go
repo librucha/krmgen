@@ -16,6 +16,15 @@ import (
 	types "github.com/librucha/krmgen/internal"
 )
 
+// locateChart is a seam over (*action.ChartPathOptions).LocateChart: a
+// reviewer noted that Render otherwise calls LocateChart on a concrete
+// action.Install with no injection point, so nothing structurally stops a
+// future test from silently going live against a real chart repository or
+// registry. Tests replace this var to guarantee that can never happen.
+var locateChart = func(opts *action.ChartPathOptions, name string, settings *cli.EnvSettings) (string, error) {
+	return opts.LocateChart(name, settings)
+}
+
 // sdkRenderer renders by calling the helm Go library directly - no helm
 // binary is required on the host.
 type sdkRenderer struct{}
@@ -24,7 +33,7 @@ func newSDKRenderer() Renderer { return sdkRenderer{} }
 
 func (sdkRenderer) Name() string { return "helm library" }
 
-func (sdkRenderer) Render(cfg *types.HelmChart, _ generator, workDir string) (string, error) {
+func (sdkRenderer) Render(cfg *types.HelmChart, g generator, workDir string) (string, error) {
 	settings := cli.New()
 
 	// DryRunClient never touches a kubeconfig or a cluster, so an empty
@@ -42,14 +51,43 @@ func (sdkRenderer) Render(cfg *types.HelmChart, _ generator, workDir string) (st
 		// or an unset namespace renders as an empty string instead.
 		client.Namespace = settings.Namespace()
 	}
-	client.RepoURL = cfg.RepoUrl
 	client.Version = cfg.Version
 	client.Username = username(cfg)
 	client.Password = password(cfg)
 
-	chartPath, err := client.LocateChart(cfg.Name, settings)
+	// oci:// charts are addressed directly - cfg.RepoUrl is already the
+	// complete chart reference (host, repository path and chart name in
+	// one), unlike an HTTP(S) chart repo where RepoUrl names only the
+	// repository and cfg.Name picks the chart out of it. This mirrors the
+	// binary renderer: ociHelmGenerator.addRepoArgs (oci-generator.go) hands
+	// `helm template` cfg.RepoUrl as its sole positional CHART argument and
+	// never appends cfg.Name either - confirmed against the real
+	// oci-public golden scenario, where appending cfg.Name (as
+	// ociHelmGenerator.chartId() does, for the unrelated purpose of
+	// deriving the login host in chartIdShort) doubles the last path
+	// segment and 404s.
+	//
+	// RepoURL must stay empty for these: ChartPathOptions.LocateChart
+	// (helm.sh/helm/v4@v4.2.4, pkg/action/install.go) treats a non-empty
+	// RepoURL as an HTTP chart-repo index lookup (repo.FindChartInRepoURL),
+	// which does not understand oci:// at all. Passing cfg.RepoUrl as the
+	// name instead, with RepoURL left unset, is what routes LocateChart
+	// through its OCI/registry-client path.
+	chartRef := cfg.Name
+	if oci, isOCI := g.(ociHelmGenerator); isOCI {
+		registryClient, err := oci.registryClient(settings)
+		if err != nil {
+			return "", fmt.Errorf("building registry client for chart %q failed error: %w", cfg.Name, err)
+		}
+		client.SetRegistryClient(registryClient)
+		chartRef = cfg.RepoUrl
+	} else {
+		client.RepoURL = cfg.RepoUrl
+	}
+
+	chartPath, err := locateChart(&client.ChartPathOptions, chartRef, settings)
 	if err != nil {
-		return "", fmt.Errorf("locating chart %q failed error: %w", cfg.Name, err)
+		return "", fmt.Errorf("locating chart %q failed error: %w", chartRef, err)
 	}
 	loaded, err := loader.Load(chartPath)
 	if err != nil {
