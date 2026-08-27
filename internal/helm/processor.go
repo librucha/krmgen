@@ -53,12 +53,17 @@ func templateHelm(generator generator, workDir string) (string, error) {
 	return selectRenderer().Render(generator.getConfig(), generator, workDir)
 }
 
-func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
-	var args []string
+// valueFiles resolves a chart's values into a list of file paths - the
+// declared values file, joined with workDir, followed by valuesInline
+// written out to a temp file. This is the single place that reads values;
+// each renderer formats the result its own way (the binary renderer turns
+// it into repeated --values flags, the SDK renderer feeds it to
+// values.Options.ValueFiles directly).
+func valueFiles(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
+	var files []string
 	valuesFile := helmChartConfig.ValuesFile
 	if valuesFile != "" {
-		filePath := filepath.Join(workDir, valuesFile)
-		args = append(args, "--values", filePath)
+		files = append(files, filepath.Join(workDir, valuesFile))
 	}
 	if len(helmChartConfig.ValuesInline) > 0 {
 		valuesInlineYaml, err := yaml.Marshal(helmChartConfig.ValuesInline)
@@ -70,7 +75,19 @@ func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, 
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, "--values", valuesInlineFile)
+		files = append(files, valuesInlineFile)
+	}
+	return files, nil
+}
+
+func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
+	files, err := valueFiles(helmChartConfig, workDir)
+	if err != nil {
+		return nil, err
+	}
+	var args []string
+	for _, f := range files {
+		args = append(args, "--values", f)
 	}
 	return args, nil
 }
