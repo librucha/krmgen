@@ -43,6 +43,11 @@ or other commands.
 | 0 | Rendering succeeded; YAML written to stdout |
 | 1 | Any error: missing argument, unreadable path, template failure, helm or kustomize failure |
 
+A failure to remove the working directory during cleanup does not by itself change
+the exit code: it is reported as a stderr warning (see Working directory lifecycle,
+below), not promoted to a returned error. It changes exit 0 to exit 1 only when it
+happens to accompany a render that already failed for its own reason.
+
 krmgen currently does not distinguish error classes by exit code. Callers must not
 rely on a specific non-zero value beyond "non-zero means failure".
 
@@ -258,7 +263,11 @@ soon as the directory exists, so a failure partway through rendering no longer
 leaves the working directory — including any rendered secrets — on disk. This
 is covered by `TestError_WorkingDirectoryRemovedOnFailure`
 (`test/golden/errors_test.go`), which runs a failing scenario under its own
-`TMPDIR` and asserts no `krmgen*` directory remains in it.
+`TMPDIR` and asserts no `krmgen*` directory remains in it. If the removal
+itself fails, that is not promoted to a returned error — a render that
+already succeeded stays a success — but it is not silent either: krmgen
+prints a stderr warning naming the path left behind, since it may still hold
+rendered secrets.
 Everything krmgen writes *inside* that directory — copied and template-evaluated
 files, and any subdirectories created while copying the source tree — is
 likewise restricted to the owning user: subdirectories are created with mode

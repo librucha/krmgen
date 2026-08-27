@@ -44,12 +44,18 @@ func NewGenerateCommand() *cobra.Command {
 // removal is registered immediately after the directory exists, so it runs on
 // every path out - including a failure part-way through processing, which
 // used to leave a directory full of rendered secrets behind.
+//
+// A cleanup failure itself does not turn a successful render into a failing
+// run: for krmgen used as an ArgoCD CMP plugin, that distinction is "sync OK"
+// vs. "sync failed", and failing the run does not get the directory removed
+// either. Instead it is reported as a stderr warning naming the path left
+// behind, since it may still hold rendered secrets.
 func generate(srcDir string, skipPatterns []string) (err error) {
 	workDir, err := copySrcDir(srcDir, skipPatterns)
 	if workDir != "" {
 		defer func() {
-			if rmErr := os.RemoveAll(workDir); rmErr != nil && err == nil {
-				err = fmt.Errorf("removing working dir %s failed error: %w", workDir, rmErr)
+			if rmErr := os.RemoveAll(workDir); rmErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not remove working dir %s: %v; it may contain rendered secrets\n", workDir, rmErr)
 			}
 		}()
 	}
