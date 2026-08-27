@@ -143,6 +143,121 @@ func TestSDKRendererMatchesHooksGolden(t *testing.T) {
 	}
 }
 
+// TestSDKRendererLibraryChart_MatchesTheBinary pins the fix for the
+// checkIfInstallable gate in Render (internal/helm/renderer_sdk.go): a
+// `type: library` chart must fail on the SDK path exactly as it does on the
+// binary path. Before the fix, action.Install.RunWithContext skipped helm
+// CLI's pre-render check entirely and returned exit 0 with an empty
+// manifest - dangerous for krmgen running as an ArgoCD CMP plugin, where
+// success with empty output means "no resources", i.e. prune everything.
+//
+// Local repo, no network - test/golden/charts/libtype is `type: library`
+// with no templates.
+func TestSDKRendererLibraryChart_MatchesTheBinary(t *testing.T) {
+	repoURL := localChartRepoFor(t, "libtype")
+
+	cfg := &types.HelmChart{
+		Name: "libtype", RepoUrl: repoURL, ReleaseName: "rel",
+		Version: "0.1.0", Namespace: "default", IgnoreCredentials: true,
+	}
+	g, err := newGenerator(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const wantErr = "library charts are not installable"
+
+	_, binErr := newBinaryRenderer().Render(cfg, g, t.TempDir())
+	if binErr == nil {
+		t.Fatal("binary renderer: want error for a type: library chart, got nil")
+	}
+	if !strings.Contains(binErr.Error(), wantErr) {
+		t.Errorf("binary renderer error = %q, want it to contain %q", binErr, wantErr)
+	}
+
+	_, sdkErr := newSDKRenderer().Render(cfg, g, t.TempDir())
+	if sdkErr == nil {
+		t.Fatal("sdk renderer: want error for a type: library chart, got nil")
+	}
+	if !strings.Contains(sdkErr.Error(), wantErr) {
+		t.Errorf("sdk renderer error = %q, want it to contain %q", sdkErr, wantErr)
+	}
+}
+
+// TestSDKRendererMissingDependency_Errors pins the other half of the
+// checkIfInstallable fix: action.CheckDependencies(chartRequested,
+// ac.MetaDependencies()), mirroring pkg/cmd/install.go's runInstall (which
+// runs it whenever Chart.yaml declares dependencies) since
+// action.Install.RunWithContext does not run it itself.
+//
+// This chart cannot reach the renderer through a real chart repo: both
+// `helm package` and `helm repo index` refuse to package/index a chart
+// whose Chart.yaml lists a dependency missing from charts/, so
+// localChartRepoFor cannot be used here (see final-fix-1.md item 1). The
+// chart is instead loaded straight off disk by overriding the locateChart
+// seam (internal/helm/renderer_sdk.go), the same technique
+// TestSDKRendererOCI_UsesRegistryClientNotRepoURL uses - no network, no helm
+// CLI packaging step involved. loader.Load accepts a chart directory
+// directly (helm.sh/helm/v4/pkg/chart/loader, DirLoader), so the raw
+// directory built below is a valid chartPath.
+func TestSDKRendererMissingDependency_Errors(t *testing.T) {
+	dir := t.TempDir()
+	chartYAML := `apiVersion: v2
+name: depchart
+description: chart with a dependency missing from charts/, for CheckDependencies
+type: application
+version: 0.1.0
+dependencies:
+  - name: missing-dep
+    version: "1.0.0"
+    repository: "https://example.invalid/charts"
+`
+	if err := os.WriteFile(filepath.Join(dir, "Chart.yaml"), []byte(chartYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "values.yaml"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cm := `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-dep
+data: {}
+`
+	if err := os.WriteFile(filepath.Join(dir, "templates", "cm.yaml"), []byte(cm), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &types.HelmChart{
+		// RepoUrl only needs to satisfy newGenerator's prefix check below -
+		// locateChart is stubbed, so it is never dereferenced as a real repo.
+		Name: "depchart", RepoUrl: "https://example.invalid/charts", ReleaseName: "rel",
+		Version: "0.1.0", Namespace: "default", IgnoreCredentials: true,
+	}
+	g, err := newGenerator(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	original := locateChart
+	t.Cleanup(func() { locateChart = original })
+	locateChart = func(_ *action.ChartPathOptions, _ string, _ *cli.EnvSettings) (string, error) {
+		return dir, nil
+	}
+
+	_, err = newSDKRenderer().Render(cfg, g, t.TempDir())
+	if err == nil {
+		t.Fatal("want error for a chart with an unfulfilled dependency, got nil")
+	}
+	const wantErr = "found in Chart.yaml, but missing in charts/ directory: missing-dep"
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("error = %q, want it to contain %q", err, wantErr)
+	}
+}
+
 // TestSDKRendererOCI_UsesRegistryClientNotRepoURL pins the fix this task
 // makes: for an oci:// chart, Render must leave client.RepoURL empty and
 // pass cfg.RepoUrl itself as the chart name (mirroring what

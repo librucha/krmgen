@@ -1,0 +1,5 @@
+apiVersion: v2
+name: libtype
+description: type:-library chart used to pin the checkIfInstallable parity guard (no manifest, not installable)
+type: library
+version: 0.1.0
