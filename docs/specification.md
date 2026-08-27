@@ -43,8 +43,37 @@ or other commands.
 | 0 | Rendering succeeded; YAML written to stdout |
 | 1 | Any error: missing argument, unreadable path, template failure, helm or kustomize failure |
 
+A failure to remove the working directory during cleanup never affects the exit
+code. It is reported as a stderr warning (see Working directory lifecycle, below),
+not promoted to a returned error, so a run that rendered successfully still exits 0
+and a run that failed still exits 1 for its own reason.
+
 krmgen currently does not distinguish error classes by exit code. Callers must not
 rely on a specific non-zero value beyond "non-zero means failure".
+
+### Error output
+
+A failing run writes the cause to stderr and exits with code 1:
+
+    Error: <what failed>
+
+No timestamp, no log level, and no usage block. An unrecognised command is
+the one case that adds a second line, cobra's own `Run 'krmgen --help' for
+usage.` suggestion.
+
+Before phase 5 the format depended on which package raised the error - the
+kustomize processor used logrus (`time=... level=fatal msg="..."`) and the
+rest used the standard library's `log` (`2026/08/27 00:23:33 ...`). Each
+individual message's wording is otherwise unchanged by the switch; the one
+exception is a typo fix (`crating directory` to `creating directory`). The
+stderr *line* changed more than that, though: every error that used to
+`log.Fatal` deep inside a call chain now gets wrapped once per layer it
+returns through, so what reaches stderr is a chain like
+`Error: processing config file <path> failed error: <cause>`, not just
+`<cause>` on its own. Only a caller matching on the innermost cause's
+substring is unaffected by that extra wrapping.
+
+Callers matching on stderr should match on the message, not on the line shape.
 
 ## 2. Configuration
 
@@ -205,19 +234,20 @@ all passes so far, not just its own.
 Reproduced directly: two `kind: KrmGen` files plus one `kustomization.yaml` in
 the same source directory, each declaring a chart that helm renders as a
 `ConfigMap` with the same name. The first pass succeeds; the second pass's
-kustomize invocation fails fatally:
+kustomize invocation fails, and the process exits 1 with:
 
 ```
-level=fatal msg="run kubectl kustomize failed error: exit status 1 reason: error:
-accumulating resources: accumulation err='merging resources from '<uuid>.yml': may
-not add resource with an already registered id: ConfigMap.v1.[noGrp]/<name>.[noNs]':
-must build at directory: '<workdir>/<uuid>.yml': file is not directory"
+Error: processing config file <workdir>/krmgen-b.yaml failed error: run kustomize
+failed: accumulating resources: accumulation err='merging resources from
+'<uuid>.yml': may not add resource with an already registered id:
+ConfigMap.v1.[noGrp]/<name>.[noNs]': must build at directory:
+'<workdir>/<uuid>.yml': file is not directory
 ```
 
-The `run kubectl kustomize failed error: ...` wrapper shown above is the
-external backend's wording; the default embedded backend wraps the same
-underlying kustomize error differently, as `run kustomize failed: ...`. Both
-raise the same underlying kustomize error — verified by
+The `run kustomize failed: ...` wrapper shown above is the default embedded
+backend's wording; the external `kubectl kustomize` backend wraps the same
+underlying kustomize error differently, as `run kubectl kustomize failed
+error: ...`. Both raise the same underlying kustomize error — verified by
 `TestGolden_BothBackendsAgreeOnErrors` (`test/golden/harness_test.go`), see
 Section 6.
 
@@ -233,11 +263,29 @@ file when a kustomization file is also present, until this is addressed.
 ### Working directory lifecycle
 
 The working directory is created under the system temp directory with mode 0700
-and removed after a successful run.
-
-**Known deviation:** when rendering fails, the process exits before cleanup runs,
-leaving the working directory — including any rendered secrets — on disk. This is
-recorded as current behaviour; it is fixed in phase 3 of the refactoring plan.
+(via `os.MkdirTemp`, which applies that mode itself) and removed when the run
+ends, whether it succeeds or fails. As of phase 5, cleanup is registered as
+soon as the directory exists, so a failure partway through rendering no longer
+leaves the working directory — including any rendered secrets — on disk. This
+is covered by `TestError_WorkingDirectoryRemovedOnFailure`
+(`test/golden/errors_test.go`), which runs a failing scenario under its own
+`TMPDIR` and asserts no `krmgen*` directory remains in it. If the removal
+itself fails, that is not promoted to a returned error — a render that
+already succeeded stays a success — but it is not silent either: krmgen
+prints a stderr warning naming the path left behind, since it may still hold
+rendered secrets.
+Everything krmgen writes *inside* that directory — copied and template-evaluated
+files, any subdirectories created while copying the source tree, per-chart
+`helm-values-<release>-<uuid>` files generated from `valuesInline`
+(`internal/helm/processor.go`), and the `<uuid>.yml` file kustomize's resources
+are collected into (`internal/kustomize/processor.go`) — is
+likewise restricted to the owning user: subdirectories are created with mode
+0700 and files with mode 0600 (`cons.DirPerm` / `cons.FilePerm`,
+`internal/utils/perm.go`), because those files may hold rendered templates,
+including secrets pulled from a key vault by the `azSec` family of functions.
+Before phase 5, files were written with `os.ModePerm` (0777) or `0666`, and
+subdirectories with `0750` — world- or group-readable modes that a rendered
+secret should never have had.
 
 ## 4. Template functions
 
@@ -459,6 +507,10 @@ Which binary is used:
 | `KRMGEN_HELM_EXECUTABLE` | That path is used as helm | `helm` is looked up in `PATH` |
 | `KRMGEN_KUBECTL_EXECUTABLE` | That path is used as kubectl, and kustomize rendering goes through it | The kustomize version compiled into krmgen renders |
 
+`KRMGEN_HELM_EXECUTABLE` set to the empty string is treated the same as unset —
+`helm` is still looked up in `PATH` (`internal/helm/processor.go:17`), consistent
+with how `selectBuilder` treats an empty `KRMGEN_KUBECTL_EXECUTABLE`.
+
 krmgen embeds `sigs.k8s.io/kustomize/api` v0.21.1 (pinned in `go.mod`).
 Parity between the embedded backend and the external `kubectl` backend — see
 Section 6 — is enforced by `TestGolden_BothBackendsAgree` and
@@ -472,7 +524,7 @@ This is the command line krmgen actually builds for `helm template`
 `addRepoArgs`/`addCredentials`). Verified with a fake `helm` executable
 (pointed to via `KRMGEN_HELM_EXECUTABLE`) that logs its argv, for both
 backends, and cross-checked against real registries. This is the single most
-parity-critical fact in this document: phase 5's go/no-go for the embedded
+parity-critical fact in this document: phase 6's go/no-go for the embedded
 helm library is a measured-parity decision against this exact invocation.
 
 **Argument order, both backends**, built in this sequence:
@@ -523,7 +575,7 @@ generators, and by inspecting captured argv from the fake-helm shim across
 every scenario tested. `.Capabilities` inside chart templates therefore
 resolves to whatever the invoked helm binary defaults to for a client-only
 `template` run, which differs between helm versions and is not something
-krmgen controls or records. This is a named risk for phase 5 and is tracked
+krmgen controls or records. This is a named risk for phase 6 and is tracked
 under Known differences between helm versions, below.
 
 **Credentials.** `credentialsArgs` (`internal/helm/generator.go:52-72`) builds
@@ -615,7 +667,7 @@ chart that branches on `.Capabilities.KubeVersion` or
 `.Capabilities.APIVersions` renders differently depending only on which helm
 binary is installed on the host — helm versions ship different built-in
 defaults for a client-only `template` run. This is invisible today because it
-never varies within a single host, but it is a named risk for phase 5: an
+never varies within a single host, but it is a named risk for phase 6: an
 embedded helm library must default to the same `.Capabilities` values as
 whichever external helm version it is being measured for parity against, or
 the two backends will disagree on any chart that reads `.Capabilities`.
@@ -624,7 +676,7 @@ the two backends will disagree on any chart that reads `.Capabilities`.
 
 krmgen does not currently detect or report the version of the external tools it
 invokes. Adding a startup check that records both versions is a requirement for
-phase 5, where two backends must be told apart in bug reports.
+phase 6, where two backends must be told apart in bug reports.
 
 ## 6. Backend parity exceptions
 

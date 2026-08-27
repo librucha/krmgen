@@ -2,7 +2,7 @@ package main
 
 import (
 	_ "embed"
-	"log"
+	"os"
 
 	"github.com/librucha/krmgen/cmd"
 )
@@ -22,6 +22,6 @@ var date string
 
 func main() {
 	if err := cmd.NewRootCommand(version).Execute(); err != nil {
-		log.Fatal(err)
+		os.Exit(1)
 	}
 }

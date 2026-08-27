@@ -33,18 +33,30 @@ func Test_helmExecutable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.name == "fallback to default" && lookErr != nil {
-				// helmExecutable() falls through to log.Fatalf when helm is
-				// not on PATH, which would kill the whole test binary - skip
-				// rather than exercise that path here.
+				// helm not on PATH in this environment - skip rather than
+				// exercise the error path here (covered by
+				// TestHelmExecutableMissing below).
 				t.Skip("helm not found on PATH")
 			}
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
-			if got := helmExecutable(); got != tt.want {
+			got, err := helmExecutable()
+			if err != nil {
+				t.Fatalf("helmExecutable() unexpected error: %v", err)
+			}
+			if got != tt.want {
 				t.Errorf("helmExecutable() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHelmExecutableMissing(t *testing.T) {
+	t.Setenv(cons.EnvHelmExecutable, "")
+	t.Setenv("PATH", t.TempDir()) // no helm anywhere
+	if _, err := helmExecutable(); err == nil {
+		t.Error("want an error when helm is not on PATH")
 	}
 }
 
@@ -278,5 +290,36 @@ func TestTemplateHelmCharts_StripsBannerBeforeConcatenating(t *testing.T) {
 	}
 	if strings.Contains(out, "Pulled:") || strings.Contains(out, "Digest:") {
 		t.Errorf("banner survived concatenation: %q", out)
+	}
+}
+
+func TestTemplateHelm_LoginFailurePropagatesAndSkipsTemplate(t *testing.T) {
+	templateInvoked := false
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		if len(arg) > 0 && arg[0] == "template" {
+			templateInvoked = true
+			return "---\nkind: ConfigMap\n", "", nil
+		}
+		return "", "unauthorized", errors.New("exit status 1")
+	}
+
+	g := newOciHelmGenerator(&types.HelmChart{
+		RepoUrl:     "oci://registry.example.com/helm",
+		Name:        "app",
+		ReleaseName: "rel",
+		Username:    "user",
+		Password:    "pass",
+	})
+	_, err := templateHelm(g, t.TempDir())
+	if err == nil {
+		t.Fatal("templateHelm() error = nil, want the login failure to propagate")
+	}
+	if !strings.Contains(err.Error(), "login to helm registry") {
+		t.Errorf("error = %v, want it to carry login's error", err)
+	}
+	if templateInvoked {
+		t.Error("templateHelm() ran `helm template` despite login failing, want it skipped")
 	}
 }

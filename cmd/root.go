@@ -7,8 +7,9 @@ import (
 
 func NewRootCommand(version string) *cobra.Command {
 	var command = &cobra.Command{
-		Use:   "krmgen",
-		Short: "Kubernetes Resource Model (KRM) generator",
+		Use:          "krmgen",
+		Short:        "Kubernetes Resource Model (KRM) generator",
+		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.HelpFunc()(cmd, args)
 		},

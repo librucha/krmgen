@@ -2,12 +2,59 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestCopiedFilesAreNotWorldReadable covers every way krmgen puts something
+// into its working directory: a template-evaluated file, a file copied as-is
+// because it matches a skip pattern, and the directories it creates on the
+// way. All three can carry or expose rendered secrets, and each is written by
+// a different call, so one assertion would not cover the others.
+func TestCopiedFilesAreNotWorldReadable(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "krmgen.yaml"), []byte("kind: KrmGen\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(src, "certs", "prod")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberately not valid Go template syntax: it must reach the working
+	// directory untouched, through the skip branch rather than the eval one.
+	if err := os.WriteFile(filepath.Join(nested, "client.pfx"), []byte("{{ not a template"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	workDir, err := copySrcDir(src, []string{"*.pfx"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
+
+	cases := []struct {
+		what string
+		path string
+		want os.FileMode
+	}{
+		{what: "template-evaluated file", path: "krmgen.yaml", want: 0600},
+		{what: "skipped file copied as-is", path: filepath.Join("certs", "prod", "client.pfx"), want: 0600},
+		{what: "created directory", path: "certs", want: 0700},
+		{what: "created nested directory", path: filepath.Join("certs", "prod"), want: 0700},
+	}
+	for _, tc := range cases {
+		info, err := os.Stat(filepath.Join(workDir, tc.path))
+		if err != nil {
+			t.Errorf("%s: %v", tc.what, err)
+			continue
+		}
+		if perm := info.Mode().Perm(); perm != tc.want {
+			t.Errorf("%s (%s) mode = %04o, want %04o - it may hold rendered secrets", tc.what, tc.path, perm, tc.want)
+		}
+	}
+}
 
 func TestMatchesSkipPattern(t *testing.T) {
 	tests := []struct {
@@ -166,33 +213,6 @@ func TestMergeSkipPatterns(t *testing.T) {
 	}
 }
 
-// fatalSentinel marks a panic raised by the fake fatalf, so an unrelated
-// panic inside the code under test is not silently reported as "fatal was
-// called" - that would turn a real crash into a passing test.
-type fatalSentinel struct{}
-
-func captureFatalf(t *testing.T, call func()) (called bool, message string) {
-	t.Helper()
-	original := fatalf
-	t.Cleanup(func() { fatalf = original })
-	fatalf = func(format string, v ...any) {
-		called = true
-		message = fmt.Sprintf(format, v...)
-		panic(fatalSentinel{})
-	}
-	defer func() {
-		r := recover()
-		if r == nil {
-			return
-		}
-		if _, ok := r.(fatalSentinel); !ok {
-			panic(r) // not our fatal - let the real failure surface
-		}
-	}()
-	call()
-	return
-}
-
 func TestCopySrcDir_EvaluatesTemplatesExceptSkipped(t *testing.T) {
 	src := t.TempDir()
 	write := func(rel, content string) {
@@ -207,7 +227,10 @@ func TestCopySrcDir_EvaluatesTemplatesExceptSkipped(t *testing.T) {
 	write("plain.yaml", `value: '{{ kubeEnv "TESTVAR" "fallback" }}'`)
 	write("certs/keep.pfx", `raw: {{ this is not a template }}`)
 
-	workDir := copySrcDir(src, []string{"*.pfx"})
+	workDir, err := copySrcDir(src, []string{"*.pfx"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
 
 	evaluated, err := os.ReadFile(filepath.Join(workDir, "plain.yaml"))
@@ -228,7 +251,10 @@ func TestCopySrcDir_EvaluatesTemplatesExceptSkipped(t *testing.T) {
 }
 
 func TestCopySrcDir_WorkDirIsPrivate(t *testing.T) {
-	workDir := copySrcDir(t.TempDir(), nil)
+	workDir, err := copySrcDir(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
 
 	info, err := os.Stat(workDir)
@@ -240,19 +266,19 @@ func TestCopySrcDir_WorkDirIsPrivate(t *testing.T) {
 	}
 }
 
-func TestCopyDir_BrokenTemplateIsFatal(t *testing.T) {
+func TestCopyDir_BrokenTemplateReturnsError(t *testing.T) {
 	src := t.TempDir()
 	if err := os.WriteFile(filepath.Join(src, "bad.yaml"), []byte("{{ .Unclosed "), 0600); err != nil {
 		t.Fatal(err)
 	}
 	dst := t.TempDir()
 
-	called, message := captureFatalf(t, func() { copyDir(src, dst, src, nil) })
-	if !called {
-		t.Fatal("expected a broken template to be fatal")
+	err := copyDir(src, dst, src, nil)
+	if err == nil {
+		t.Fatal("expected a broken template to return an error")
 	}
-	if !strings.Contains(message, "template evaluation") {
-		t.Errorf("message = %q, want it to name template evaluation", message)
+	if !strings.Contains(err.Error(), "template evaluation") {
+		t.Errorf("error = %q, want it to name template evaluation", err)
 	}
 }
 
@@ -271,9 +297,12 @@ func TestProcessWorkDir_PrintsOnlyKrmGenFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Stdout = w
-	processWorkDir(dir)
+	processErr := processWorkDir(dir)
 	_ = w.Close()
 	os.Stdout = stdout
+	if processErr != nil {
+		t.Fatal(processErr)
+	}
 
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(r); err != nil {

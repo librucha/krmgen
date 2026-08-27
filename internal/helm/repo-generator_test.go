@@ -5,6 +5,24 @@ import (
 	"testing"
 )
 
+func Test_repoHelmGenerator_login_noop(t *testing.T) {
+	called := false
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		called = true
+		return "", "", nil
+	}
+
+	g := newRepoHelmGenerator(&types.HelmChart{RepoUrl: "https://charts.example.com", Name: "mychart"})
+	if err := g.login(); err != nil {
+		t.Fatalf("login() error = %v, want nil", err)
+	}
+	if called {
+		t.Error("login() invoked runCommand, want it to be a no-op (repo login is unsupported)")
+	}
+}
+
 // Test_repoHelmGenerator_chartIdShort is a characterization test: it pins
 // today's behaviour of helmUrlRegexp, including the bug. The regexp's
 // character class ([0-9a-zA-Z-_]) has no dot, so it stops at the first dot

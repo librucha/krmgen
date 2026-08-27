@@ -18,7 +18,7 @@ type idProvider interface {
 
 type authenticator interface {
 	// authenticate to specific helm remote
-	login()
+	login() error
 	addCredentials([]string) []string
 }
 

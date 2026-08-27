@@ -1,7 +1,10 @@
 package helm
 
 import (
+	"errors"
 	types "github.com/librucha/krmgen/internal"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -78,5 +81,49 @@ func Test_ociHelmGenerator_chartIdShort(t *testing.T) {
 				t.Errorf("chartIdShort() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func Test_ociHelmGenerator_login_failure(t *testing.T) {
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		return "", "unauthorized", errors.New("exit status 1")
+	}
+
+	g := newOciHelmGenerator(&types.HelmChart{RepoUrl: "oci://registry.example.com/helm", Name: "mychart"})
+	err := g.login()
+	if err == nil {
+		t.Fatal("login() error = nil, want the helm failure to propagate")
+	}
+	if !strings.Contains(err.Error(), "login to helm registry") {
+		t.Errorf("error = %v, want it to contain %q", err, "login to helm registry")
+	}
+	if !strings.Contains(err.Error(), "registry.example.com") {
+		t.Errorf("error = %v, want it to contain the registry name %q", err, "registry.example.com")
+	}
+}
+
+func Test_ociHelmGenerator_login_success(t *testing.T) {
+	var gotArgs []string
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		gotArgs = arg
+		return "", "", nil
+	}
+
+	g := newOciHelmGenerator(&types.HelmChart{
+		RepoUrl:  "oci://registry.example.com/helm",
+		Name:     "mychart",
+		Username: "user",
+		Password: "pass",
+	})
+	if err := g.login(); err != nil {
+		t.Fatalf("login() error = %v, want nil", err)
+	}
+	want := []string{"registry", "login", "registry.example.com", "--username", "user", "--password", "pass"}
+	if !reflect.DeepEqual(gotArgs, want) {
+		t.Errorf("helm invoked with args = %v, want %v", gotArgs, want)
 	}
 }

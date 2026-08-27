@@ -34,7 +34,8 @@ If `task` is not installed: `go build -o build/krmgen .` and `go test ./...`
 - External binary `helm` must be present in PATH. `kubectl` is only needed if `KRMGEN_KUBECTL_EXECUTABLE` opts into the external Kustomize backend — the default path renders through the embedded library and needs no `kubectl`.
 - Template functions `env` and `expandenv` are intentionally removed from sprig for security.
 - Azure providers use `azidentity.NewDefaultAzureCredential` — requires valid Azure auth in environment.
-- Errors use `log.Fatal` (intentional CLI pattern — no error recovery).
+- Production code returns errors up the call stack instead of calling `log.Fatal`; cobra prints the
+  returned error to stderr (`Error: ...`) and `main` (`krmgen.go`) exits with code 1.
 - `valuesInline` in HelmChart config generates a temp file per chart in workDir.
 
 ## Where things live
@@ -47,7 +48,7 @@ If `task` is not installed: `go build -o build/krmgen .` and `go test ./...`
 | Helm execution | `internal/helm/` |
 | Kustomize execution | `internal/kustomize/` |
 | Template functions | `internal/template/` |
-| Azure providers | `internal/template/azure/` |
+| Azure providers | `github.com/librucha/cloud-go-templates` (external dependency, not in this repo) |
 | Env/file providers | `internal/template/argocd/`, `kube/`, `files/` |
 | Constants | `internal/utils/constants.go` |
 | Test fixtures | `test/resources/` |

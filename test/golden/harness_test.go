@@ -288,8 +288,8 @@ func TestGolden_TemplateFunctions(t *testing.T) {
 }
 
 // TestGolden_StdoutCarriesOnlyYaml asserts that stdout, in its entirety,
-// decodes as a stream of YAML documents. Log lines (from logrus or the
-// standard library) go to stderr, never stdout, so a substring check for
+// decodes as a stream of YAML documents. Log lines (from the standard
+// library) go to stderr, never stdout, so a substring check for
 // "level=" / "time=" prefixes can never fail - it does not test what its
 // name promises. Decoding is the real assertion: it fails on any malformed
 // document and on empty output (a decoder that reports zero documents),

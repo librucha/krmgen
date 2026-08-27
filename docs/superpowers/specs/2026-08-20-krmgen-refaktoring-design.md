@@ -146,9 +146,10 @@ jen rozhraní.
 | 2 | Golden-master + unit testy | testovací síť | **hotovo 2026-08-25**: 8 scénářů, pokrytí 71,4 % (viz níže) |
 | 3 | Knihovna šablon ven | `cloud-go-templates` v1 | **hotovo 2026-08-25**: goldeny beze změny (viz níže) |
 | 4 | kustomize → krusty | `Builder` + 2 impl. | **hotovo 2026-08-26**: goldeny beze změny, parita ověřena testem (viz níže) |
-| 5 | helm → SDK | `Renderer` + 2 impl. | naměřená parita → rozhodnutí jít/nejít |
+| 5 | Kvalita kódu | `log.Fatal` → návratové chyby, sjednocené stderr, práva souborů | **hotovo 2026-08-27**: viz „Kvalita kódu — přiřazení k fázím" níže |
+| 6 | helm → SDK | `Renderer` + 2 impl. | naměřená parita → rozhodnutí jít/nejít |
 
-Fáze 5 je jediná s reálnou možností „ne". Rozhodne se podle naměřené parity, ne dopředu.
+Fáze 6 je jediná s reálnou možností „ne". Rozhodne se podle naměřené parity, ne dopředu.
 
 ### Fáze 1 — co spec pokryje
 
@@ -315,10 +316,10 @@ kubectl v1.36.3 / Kustomize v5.8.1), embedded cesta pinnutou verzí v
 
 | Nález | Fáze |
 |---|---|
-| `log.Fatal` na 27 místech → návratové chyby (v knihovně nepřípustný) | 5 (přesunuto ze 4 — plán fáze 4 se soustředil na `Builder` rozhraní pro kustomize a `log.Fatal` napříč zbytkem krmgenu vědomě neřešil; fáze 4 je uzavřená. `internal/kustomize/builder_krusty.go` a `builder_kubectl.go` už chybu vrací, ale `internal/kustomize/processor.go` a zbytek repa pořád volají `log.Fatalf`) |
-| Dva loggery: stdlib `log` v 6 souborech, logrus v jednom | 5 (přesunuto ze 4 — fáze 4 se `internal/kustomize` dotkla, ale logování v něm vědomě nechala beze změny, protože golden sada testuje přesný text fatální hlášky; fáze 4 je uzavřená) |
-| `os.ModePerm` (0777) a `0666` na souborech s vyrenderovanými secrets | 5 (přesunuto ze 4 — fáze 4 tyhle cesty nezapisovala ani nečetla; fáze 4 je uzavřená) |
-| Při `log.Fatal` v `processWorkDir` se nespustí `defer os.RemoveAll` → temp adresář se secrets zůstane na disku | 5 (přesunuto ze 4 — plán fáze 4 tuto položku nikdy neřešil a fáze 4 je uzavřená) |
+| `log.Fatal` na 14 místech v produkčním kódu (mimo `cmd/only-test`, vývojovou utilitu; naměřeno 16 celkem) → návratové chyby (v knihovně nepřípustný) | **hotovo 5** (`internal/kustomize/processor.go`, `internal/helm/oci-generator.go`, `internal/helm/processor.go`, `cmd/generate.go` a `krmgen.go` teď vrací chyby; `cmd.NewRootCommand(...).Execute()` je nechá vytisknout cobrou a `main` skončí `os.Exit(1)`. `grep -rn 'log\.Fatal' --include=*.go . \| grep -v _test \| grep -v cmd/only-test` je prázdný) |
+| Dva loggery: stdlib `log` v 6 souborech, logrus v jednom | **hotovo 5** (`github.com/sirupsen/logrus` odstraněn z `go.mod`/`go.sum` úlohou 7 — `go mod tidy` ho smazal úplně, nezůstal ani jako nepřímá závislost. Zůstal jen stdlib `log`: informativní `log.Println` v `internal/config/parser.go` a dva `log.Fatal` ve vývojové utilitě `cmd/only-test/run.go`, mimo produkt) |
+| `os.ModePerm` (0777) a `0666` na souborech s vyrenderovanými secrets | **hotovo 5** (`internal/utils/perm.go` zavádí `FilePerm 0600` / `DirPerm 0700`, použité v `cmd/generate.go`, `internal/kustomize/processor.go` a `internal/helm/processor.go`) |
+| Při `log.Fatal` v `processWorkDir` se nespustí `defer os.RemoveAll` → temp adresář se secrets zůstane na disku | **hotovo 5** (`generate` v `cmd/generate.go` registruje `defer os.RemoveAll(workDir)` hned po vytvoření adresáře, takže poběží na každé cestě ven včetně chyby uprostřed zpracování; dokázáno `TestError_WorkingDirectoryRemovedOnFailure` v `test/golden/errors_test.go`) |
 | `KRMGEN_KUBECTL_EXECUTABLE` deklarovaná, dokumentovaná, nikde nepoužitá | **hotovo 4** (R1 ji zavedla doopravdy — `internal/kustomize/builder.go`, `selectBuilder`) |
 | Zakomentovaná validace schématu ukazuje na neexistující soubor | 1 |
 | Překlepy v chybových hláškách (`failerd`, `crating`, `unwraping`) | průběžně |
@@ -342,8 +343,8 @@ Spec rozhodne, která strana se přizpůsobí. U `azUaIdClientId` je k úvaze p�
 | Riziko | Ošetření |
 |---|---|
 | Jiná verze kustomize v krusty než v `kubectl` → jiný výstup | goldeny ukážou diff, schvaluje se ručně |
-| Helm SDK nenastaví výchozí `KubeVersion` a API verze jako CLI → charty s `.Capabilities` tiše změní výstup | explicitní dorovnání ve fázi 5, vlastní golden scénář |
-| Reimplementace registry auth, OCI pull a repo indexu pro SDK | za rozhraním; při neúspěchu se fáze 5 nenasadí |
+| Helm SDK nenastaví výchozí `KubeVersion` a API verze jako CLI → charty s `.Capabilities` tiše změní výstup | explicitní dorovnání ve fázi 6, vlastní golden scénář |
+| Reimplementace registry auth, OCI pull a repo indexu pro SDK | za rozhraním; při neúspěchu se fáze 6 nenasadí |
 | Změna výchozího backendu (R2) je breaking change | release notes, major verze |
 | Banner z Helmu v4 na stdout | strip zůstává natrvalo pro externí cestu |
 

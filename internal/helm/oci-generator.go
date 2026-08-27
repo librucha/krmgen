@@ -1,9 +1,8 @@
 package helm
 
 import (
+	"fmt"
 	types "github.com/librucha/krmgen/internal"
-	"github.com/librucha/krmgen/internal/tool"
-	"log"
 	"regexp"
 	"strings"
 )
@@ -34,14 +33,17 @@ func (g ociHelmGenerator) chartIdShort() string {
 	return g.chartId()
 }
 
-func (g ociHelmGenerator) login() {
+func (g ociHelmGenerator) login() error {
 	args := []string{"registry", "login", g.chartIdShort()}
 	args = g.addCredentials(args)
-
-	_, _, err := tool.RunCommand(helmExecutable(), args...)
+	executable, err := helmExecutable()
 	if err != nil {
-		log.Fatalf("login to helm registry %q failed reason: %q", g.chartIdShort(), err.Error())
+		return err
 	}
+	if _, _, err := runCommand(executable, args...); err != nil {
+		return fmt.Errorf("login to helm registry %q failed reason: %q", g.chartIdShort(), err.Error())
+	}
+	return nil
 }
 
 func (g ociHelmGenerator) addCredentials(in []string) []string {

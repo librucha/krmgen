@@ -1,10 +1,11 @@
 package kustomize
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/librucha/krmgen/internal/tool"
-	log "github.com/sirupsen/logrus"
+	cons "github.com/librucha/krmgen/internal/utils"
 	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
@@ -18,10 +19,17 @@ var allowedFileNames = map[string]any{"kustomization.yaml": nil, "kustomization.
 // without running the binary.
 var runCommand = tool.RunCommand
 
+// errMultipleKustomizeFiles is a sentinel used to tell "the walk callback
+// rejected what it found" apart from "the walk itself failed" (permission
+// errors, a vanished directory, ...). Only the latter gets wrapped as a
+// search failure below - the former is returned to the caller as-is.
+var errMultipleKustomizeFiles = errors.New("found multiple kustomization files")
+
 // FindKustomizeFile tries to find a kustomization file to build (see
-// selectBuilder for which backend ends up building it).
-// Returns founded kustomization file path.
-func FindKustomizeFile(workDir string) string {
+// selectBuilder for which backend does the building). It returns an empty
+// path and no error when the directory holds none, and an error when it
+// holds more than one or cannot be walked.
+func FindKustomizeFile(workDir string) (string, error) {
 	var kustomizeFile string
 	err := filepath.Walk(workDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
@@ -33,51 +41,52 @@ func FindKustomizeFile(workDir string) string {
 		_, ok := allowedFileNames[strings.ToLower(filepath.Base(path))]
 		if ok {
 			if kustomizeFile != "" {
-				log.Fatalf("found multiple kustomization files under: %s", workDir)
+				return fmt.Errorf("%w under: %s", errMultipleKustomizeFiles, workDir)
 			}
 			kustomizeFile = path
 		}
 		return nil
 	})
 	if err != nil {
-		log.Fatalf("search kustomize files failed. error: %s", err)
+		if errors.Is(err, errMultipleKustomizeFiles) {
+			return "", err
+		}
+		return "", fmt.Errorf("search kustomize files failed. error: %w", err)
 	}
-	return kustomizeFile
+	return kustomizeFile, nil
 }
 
-func BuildKustomize(kustomizeFile string, workDir string, resources string) string {
+func BuildKustomize(kustomizeFile string, workDir string, resources string) (string, error) {
 	if kustomizeFile == "" {
-		log.Fatalf("no given kustomizeFile parameter")
+		return "", fmt.Errorf("no given kustomizeFile parameter")
 	}
 	var resourcesFile string
 	if resources != "" {
 		resourcesFile = filepath.Join(workDir, uuid.NewString()+".yml")
-		err := os.WriteFile(resourcesFile, []byte(resources), os.ModePerm)
+		err := os.WriteFile(resourcesFile, []byte(resources), cons.FilePerm)
 		if err != nil {
-			log.Fatalf("write file %qwith resources failed error: %s", resourcesFile, err)
+			return "", fmt.Errorf("write file %qwith resources failed error: %w", resourcesFile, err)
 		}
 	}
-	prepareKustomizeFile(kustomizeFile, resourcesFile, workDir)
-
-	out, err := selectBuilder().Build(workDir)
-	if err != nil {
-		log.Fatalf("%s", err)
+	if err := prepareKustomizeFile(kustomizeFile, resourcesFile, workDir); err != nil {
+		return "", err
 	}
-	return out
+
+	return selectBuilder().Build(workDir)
 }
 
-func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir string) {
+func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir string) error {
 
 	// add resources to kustomize file
 	var kustomizeFileYaml map[string]any
 	fileContent, err := os.ReadFile(kustomizeFile)
 	if err != nil {
-		log.Fatalf("reading kustomization file %q failed error: %s", kustomizeFile, err)
+		return fmt.Errorf("reading kustomization file %q failed error: %w", kustomizeFile, err)
 	}
 
 	err = yaml.Unmarshal(fileContent, &kustomizeFileYaml)
 	if err != nil {
-		log.Fatalf("unmarshaling kustomize file %q failed error: %s", kustomizeFile, err)
+		return fmt.Errorf("unmarshaling kustomize file %q failed error: %w", kustomizeFile, err)
 	}
 	res, ok := kustomizeFileYaml["resources"]
 	if !ok {
@@ -85,7 +94,7 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 	}
 	kustomizeResources, err := unwrapResources(res)
 	if err != nil {
-		log.Fatalf("unwraping resources from %q failed error: %s", kustomizeFile, err)
+		return fmt.Errorf("unwraping resources from %q failed error: %w", kustomizeFile, err)
 	}
 
 	if resourcesFile != "" {
@@ -97,13 +106,14 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 		kustomizeFileYaml["resources"] = kustomizeResources
 		updatedFileContent, err := yaml.Marshal(kustomizeFileYaml)
 		if err != nil {
-			log.Fatalf("marshaling updated file content failed error: %s", err)
+			return fmt.Errorf("marshaling updated file content failed error: %w", err)
 		}
-		err = os.WriteFile(kustomizeFile, updatedFileContent, os.ModePerm)
+		err = os.WriteFile(kustomizeFile, updatedFileContent, cons.FilePerm)
 		if err != nil {
-			log.Fatalf("writing updated kustomize file %q failed error: %s", kustomizeFile, err)
+			return fmt.Errorf("writing updated kustomize file %q failed error: %w", kustomizeFile, err)
 		}
 	}
+	return nil
 }
 
 func unwrapResources(in any) ([]string, error) {
