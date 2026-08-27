@@ -13,8 +13,8 @@ func TestSelectRenderer(t *testing.T) {
 		setEnv   bool
 		wantName string
 	}{
-		{name: "unset selects the binary for now", setEnv: false, wantName: "helm binary"},
-		{name: "empty is treated as unset", env: "", setEnv: true, wantName: "helm binary"},
+		{name: "unset selects the library", setEnv: false, wantName: "helm library"},
+		{name: "empty is treated as unset", env: "", setEnv: true, wantName: "helm library"},
 		{name: "a path selects the binary", env: "/usr/local/bin/helm", setEnv: true, wantName: "helm binary"},
 	}
 	for _, tt := range tests {

@@ -49,19 +49,8 @@ func TemplateHelmCharts(helmConfig *types.Helm, workDir string) (string, error) 
 	return helmOutput.String(), nil
 }
 
-// forceRenderer overrides selectRenderer when non-nil. It is never set in a
-// default build - the only assignment lives behind the forcesdk build tag
-// (renderer_forcesdk.go), a seam for the golden differential test that lets
-// it drive the SDK renderer unconditionally before selectRenderer itself
-// gains real branching (see docs/specification.md, section 5, and task 4 of
-// the helm-sdk phase).
-var forceRenderer Renderer
-
 func templateHelm(generator generator, workDir string) (string, error) {
-	renderer := forceRenderer
-	if renderer == nil {
-		renderer = selectRenderer()
-	}
+	renderer := selectRenderer()
 	return renderer.Render(generator.getConfig(), generator, workDir)
 }
 

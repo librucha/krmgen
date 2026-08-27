@@ -55,44 +55,6 @@ func binaryPath(t *testing.T) string {
 	return builtBin
 }
 
-// libraryBinaryPath builds krmgen with the forcesdk build tag, once per test
-// run, and returns its path. See internal/helm/renderer_forcesdk.go: a
-// binary built this way forces every helm chart through the SDK renderer
-// unconditionally. It exists only for TestGolden_BothHelmRenderersAgree -
-// selectRenderer (internal/helm/renderer.go) still returns the binary
-// renderer unconditionally at this point in the phase, so KRMGEN_HELM_EXECUTABLE
-// cannot select the library renderer on the ordinary binaryPath(t) binary;
-// this second binary is the only way to reach it before task 4 wires real
-// branching into selectRenderer.
-var (
-	libraryBuildOnce sync.Once
-	libraryBuiltBin  string
-	libraryBuildErr  error
-)
-
-func libraryBinaryPath(t *testing.T) string {
-	t.Helper()
-	libraryBuildOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "krmgen-golden-library")
-		if err != nil {
-			libraryBuildErr = err
-			return
-		}
-		bin := filepath.Join(dir, "krmgen")
-		build := exec.Command("go", "build", "-tags", "forcesdk", "-o", bin, ".")
-		build.Dir = repoRoot(t)
-		if out, cmdErr := build.CombinedOutput(); cmdErr != nil {
-			libraryBuildErr = fmt.Errorf("building krmgen (forcesdk): %w\n%s", cmdErr, out)
-			return
-		}
-		libraryBuiltBin = bin
-	})
-	if libraryBuildErr != nil {
-		t.Fatalf("%v", libraryBuildErr)
-	}
-	return libraryBuiltBin
-}
-
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
@@ -166,9 +128,10 @@ func runScenario(t *testing.T, name string, extraEnv ...string) result {
 	return runScenarioWithBinary(t, binaryPath(t), name, extraEnv...)
 }
 
-// runScenarioWithBinary is runScenario against an arbitrary krmgen binary -
-// the seam TestGolden_BothHelmRenderersAgree uses to run the same fixture
-// through both binaryPath(t) and libraryBinaryPath(t).
+// runScenarioWithBinary is runScenario against an arbitrary krmgen binary.
+// runScenario is the sole caller today, always passing binaryPath(t); the
+// split stays because it keeps the fixture-copy/env-assembly logic separate
+// from the choice of binary.
 func runScenarioWithBinary(t *testing.T, bin, name string, extraEnv ...string) result {
 	t.Helper()
 
@@ -546,41 +509,25 @@ func TestGolden_ExternalBackendMatchesTheGoldens(t *testing.T) {
 
 // TestGolden_BothHelmRenderersAgree runs every scenario that renders a helm
 // chart through both helm backends and requires byte-identical stdout and
-// matching exit codes. This is the measurement task 4 of this phase depends
-// on: it flips selectRenderer's default from the binary to the library, and
-// may only do so once this test says the two already agree on everything
-// the golden suite exercises.
+// matching exit codes. This is the measurement task 4 of this phase depended
+// on before flipping selectRenderer's default from the binary to the
+// library (internal/helm/renderer.go); now it is the regression guard that
+// keeps the two backends interchangeable going forward. It is the sibling of
+// TestGolden_BothBackendsAgree above: same binary, same fixture, the only
+// variable is an environment variable.
 //
-// Unlike TestGolden_BothBackendsAgree above, this cannot compare two runs of
-// the same binary under different environments: selectRenderer
-// (internal/helm/renderer.go) still returns the binary renderer
-// unconditionally at this point in the phase, and KRMGEN_HELM_EXECUTABLE
-// only changes which `helm` executable the binary renderer shells out to -
-// it can never select the library renderer. Running binaryPath(t) twice,
-// with and without that variable, would exercise the binary renderer both
-// times and pass vacuously.
-//
-// So the "library" side here is a second krmgen binary, built with the
-// forcesdk tag (libraryBinaryPath, internal/helm/renderer_forcesdk.go),
-// whose templateHelm (internal/helm/processor.go) is forced to call the SDK
-// renderer unconditionally via the forceRenderer seam. Both binaries are
-// built from the same source tree and run the exact same production code
-// path - fixture copy, Go template evaluation, chart discovery,
-// TemplateHelmCharts, optional kustomize - so the only variable between the
-// two runs is which Renderer.Render implementation actually rendered the
-// chart(s). Neither run is a stand-in or a reimplementation of the other:
-// binaryPath(t) shells out to the real `helm` executable exactly as
-// production does today, and libraryBinaryPath(t) calls the real,
-// unmodified sdkRenderer.Render (internal/helm/renderer_sdk.go) exactly as
-// production will once task 4 lands - the forcesdk tag only decides which of
-// the two is reachable without an environment variable, it does not alter
-// either renderer's behaviour.
-//
-// minimalEnv() (used by both runs, via runScenarioWithBinary) never sets
-// KRMGEN_HELM_EXECUTABLE, so an ambient value on the host cannot make the
-// "binary" run silently stop being itself.
+// selectRenderer defaults to the embedded library and switches to the
+// external helm binary only when KRMGEN_HELM_EXECUTABLE names a non-empty
+// path, so the "library" run is the default, minimal environment
+// (minimalEnv, via runScenario, never sets KRMGEN_HELM_EXECUTABLE) and the
+// "binary" run sets it to the real helm on PATH. Both runs execute the exact
+// same production binary and code path - fixture copy, Go template
+// evaluation, chart discovery, TemplateHelmCharts, optional kustomize - so
+// the only thing that differs is which Renderer.Render implementation
+// actually rendered the chart(s).
 func TestGolden_BothHelmRenderersAgree(t *testing.T) {
-	if _, err := exec.LookPath("helm"); err != nil {
+	helmPath, err := exec.LookPath("helm")
+	if err != nil {
 		t.Fatalf("helm is required to compare renderers: %v", err)
 	}
 
@@ -609,8 +556,16 @@ func TestGolden_BothHelmRenderersAgree(t *testing.T) {
 				extraEnv = []string{"ARGOCD_ENV_MESSAGE=from-env"}
 			}
 
-			viaBinary := runScenarioWithBinary(t, binaryPath(t), name, extraEnv...)
-			viaLibrary := runScenarioWithBinary(t, libraryBinaryPath(t), name, extraEnv...)
+			// Exit code is not required to be 0: nested-kustomization renders
+			// its chart successfully through the helm phase and then fails at
+			// the kustomize step (kustomization.yaml is nested, and
+			// FindKustomizeFile deliberately does not search subdirectories -
+			// see errors_test.go). It stays in this list because the helm
+			// phase still ran on both backends and must have agreed before
+			// the pipeline failed; only the exit codes and stdout need to
+			// match between the two runs, not equal 0.
+			viaLibrary := runScenario(t, name, extraEnv...)
+			viaBinary := runScenario(t, name, append(extraEnv, "KRMGEN_HELM_EXECUTABLE="+helmPath)...)
 
 			if viaBinary.exitCode != viaLibrary.exitCode {
 				t.Fatalf("exit codes disagree: binary=%d library=%d\nbinary stderr: %s\nlibrary stderr: %s",

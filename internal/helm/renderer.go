@@ -1,7 +1,10 @@
 package helm
 
 import (
+	"os"
+
 	types "github.com/librucha/krmgen/internal"
+	cons "github.com/librucha/krmgen/internal/utils"
 )
 
 // Renderer turns one chart declaration into rendered YAML. Two implementations
@@ -15,9 +18,14 @@ type Renderer interface {
 	Name() string
 }
 
-// selectRenderer decides which backend renders. For now it always returns the
-// binary renderer; a second implementation and the selection logic between
-// them are introduced in a later phase.
+// selectRenderer decides which backend renders. The embedded helm library is
+// the default; setting KRMGEN_HELM_EXECUTABLE opts into the external helm
+// binary. An empty value is treated as unset, consistent with helmExecutable
+// itself (internal/helm/processor.go) and with selectBuilder
+// (internal/kustomize/builder.go).
 func selectRenderer() Renderer {
-	return newBinaryRenderer()
+	if executable, found := os.LookupEnv(cons.EnvHelmExecutable); found && executable != "" {
+		return newBinaryRenderer()
+	}
+	return newSDKRenderer()
 }
