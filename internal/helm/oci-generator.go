@@ -75,7 +75,16 @@ func (g ociHelmGenerator) registryClient(settings *cli.EnvSettings) (*registry.C
 		registry.ClientOptEnableCache(true),
 		registry.ClientOptCredentialsFile(settings.RegistryConfig),
 	}
-	if username, password := credentials(g.config); username != "" || password != "" {
+	// helm itself only applies these credentials when both are present
+	// (registry.Client.NewClient, helm.sh/helm/v4@v4.2.4 pkg/registry/client.go:127:
+	// `if client.username != "" && client.password != ""`); a username-only or
+	// password-only config falls through to the on-disk credentials store there
+	// regardless of what ClientOptBasicAuth was given. Matching the condition
+	// here, instead of the wider `||` this used to be, keeps that gate visible
+	// in this file rather than only inside helm - it does not change what
+	// NewClient does with a partial credential, just stops implying the
+	// opposite.
+	if username, password := credentials(g.config); username != "" && password != "" {
 		opts = append(opts, registry.ClientOptBasicAuth(username, password))
 	}
 	return registry.NewClient(opts...)
