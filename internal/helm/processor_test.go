@@ -292,3 +292,34 @@ func TestTemplateHelmCharts_StripsBannerBeforeConcatenating(t *testing.T) {
 		t.Errorf("banner survived concatenation: %q", out)
 	}
 }
+
+func TestTemplateHelm_LoginFailurePropagatesAndSkipsTemplate(t *testing.T) {
+	templateInvoked := false
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		if len(arg) > 0 && arg[0] == "template" {
+			templateInvoked = true
+			return "---\nkind: ConfigMap\n", "", nil
+		}
+		return "", "unauthorized", errors.New("exit status 1")
+	}
+
+	g := newOciHelmGenerator(&types.HelmChart{
+		RepoUrl:     "oci://registry.example.com/helm",
+		Name:        "app",
+		ReleaseName: "rel",
+		Username:    "user",
+		Password:    "pass",
+	})
+	_, err := templateHelm(g, t.TempDir())
+	if err == nil {
+		t.Fatal("templateHelm() error = nil, want the login failure to propagate")
+	}
+	if !strings.Contains(err.Error(), "login to helm registry") {
+		t.Errorf("error = %v, want it to carry login's error", err)
+	}
+	if templateInvoked {
+		t.Error("templateHelm() ran `helm template` despite login failing, want it skipped")
+	}
+}
