@@ -524,7 +524,7 @@ This is the command line krmgen actually builds for `helm template`
 `addRepoArgs`/`addCredentials`). Verified with a fake `helm` executable
 (pointed to via `KRMGEN_HELM_EXECUTABLE`) that logs its argv, for both
 backends, and cross-checked against real registries. This is the single most
-parity-critical fact in this document: phase 5's go/no-go for the embedded
+parity-critical fact in this document: phase 6's go/no-go for the embedded
 helm library is a measured-parity decision against this exact invocation.
 
 **Argument order, both backends**, built in this sequence:
@@ -575,7 +575,7 @@ generators, and by inspecting captured argv from the fake-helm shim across
 every scenario tested. `.Capabilities` inside chart templates therefore
 resolves to whatever the invoked helm binary defaults to for a client-only
 `template` run, which differs between helm versions and is not something
-krmgen controls or records. This is a named risk for phase 5 and is tracked
+krmgen controls or records. This is a named risk for phase 6 and is tracked
 under Known differences between helm versions, below.
 
 **Credentials.** `credentialsArgs` (`internal/helm/generator.go:52-72`) builds
@@ -667,7 +667,7 @@ chart that branches on `.Capabilities.KubeVersion` or
 `.Capabilities.APIVersions` renders differently depending only on which helm
 binary is installed on the host — helm versions ship different built-in
 defaults for a client-only `template` run. This is invisible today because it
-never varies within a single host, but it is a named risk for phase 5: an
+never varies within a single host, but it is a named risk for phase 6: an
 embedded helm library must default to the same `.Capabilities` values as
 whichever external helm version it is being measured for parity against, or
 the two backends will disagree on any chart that reads `.Capabilities`.
@@ -676,7 +676,7 @@ the two backends will disagree on any chart that reads `.Capabilities`.
 
 krmgen does not currently detect or report the version of the external tools it
 invokes. Adding a startup check that records both versions is a requirement for
-phase 5, where two backends must be told apart in bug reports.
+phase 6, where two backends must be told apart in bug reports.
 
 ## 6. Backend parity exceptions
 

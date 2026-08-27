@@ -146,9 +146,10 @@ jen rozhraní.
 | 2 | Golden-master + unit testy | testovací síť | **hotovo 2026-08-25**: 8 scénářů, pokrytí 71,4 % (viz níže) |
 | 3 | Knihovna šablon ven | `cloud-go-templates` v1 | **hotovo 2026-08-25**: goldeny beze změny (viz níže) |
 | 4 | kustomize → krusty | `Builder` + 2 impl. | **hotovo 2026-08-26**: goldeny beze změny, parita ověřena testem (viz níže) |
-| 5 | helm → SDK | `Renderer` + 2 impl. | naměřená parita → rozhodnutí jít/nejít |
+| 5 | Kvalita kódu | `log.Fatal` → návratové chyby, sjednocené stderr, práva souborů | **hotovo 2026-08-27**: viz „Kvalita kódu — přiřazení k fázím" níže |
+| 6 | helm → SDK | `Renderer` + 2 impl. | naměřená parita → rozhodnutí jít/nejít |
 
-Fáze 5 je jediná s reálnou možností „ne". Rozhodne se podle naměřené parity, ne dopředu.
+Fáze 6 je jediná s reálnou možností „ne". Rozhodne se podle naměřené parity, ne dopředu.
 
 ### Fáze 1 — co spec pokryje
 
@@ -342,8 +343,8 @@ Spec rozhodne, která strana se přizpůsobí. U `azUaIdClientId` je k úvaze p�
 | Riziko | Ošetření |
 |---|---|
 | Jiná verze kustomize v krusty než v `kubectl` → jiný výstup | goldeny ukážou diff, schvaluje se ručně |
-| Helm SDK nenastaví výchozí `KubeVersion` a API verze jako CLI → charty s `.Capabilities` tiše změní výstup | explicitní dorovnání ve fázi 5, vlastní golden scénář |
-| Reimplementace registry auth, OCI pull a repo indexu pro SDK | za rozhraním; při neúspěchu se fáze 5 nenasadí |
+| Helm SDK nenastaví výchozí `KubeVersion` a API verze jako CLI → charty s `.Capabilities` tiše změní výstup | explicitní dorovnání ve fázi 6, vlastní golden scénář |
+| Reimplementace registry auth, OCI pull a repo indexu pro SDK | za rozhraním; při neúspěchu se fáze 6 nenasadí |
 | Změna výchozího backendu (R2) je breaking change | release notes, major verze |
 | Banner z Helmu v4 na stdout | strip zůstává natrvalo pro externí cestu |
 
