@@ -33,18 +33,30 @@ func Test_helmExecutable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.name == "fallback to default" && lookErr != nil {
-				// helmExecutable() falls through to log.Fatalf when helm is
-				// not on PATH, which would kill the whole test binary - skip
-				// rather than exercise that path here.
+				// helm not on PATH in this environment - skip rather than
+				// exercise the error path here (covered by
+				// TestHelmExecutableMissing below).
 				t.Skip("helm not found on PATH")
 			}
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
-			if got := helmExecutable(); got != tt.want {
+			got, err := helmExecutable()
+			if err != nil {
+				t.Fatalf("helmExecutable() unexpected error: %v", err)
+			}
+			if got != tt.want {
 				t.Errorf("helmExecutable() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHelmExecutableMissing(t *testing.T) {
+	t.Setenv(cons.EnvHelmExecutable, "")
+	t.Setenv("PATH", t.TempDir()) // no helm anywhere
+	if _, err := helmExecutable(); err == nil {
+		t.Error("want an error when helm is not on PATH")
 	}
 }
 

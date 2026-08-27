@@ -28,8 +28,9 @@ func (g repoHelmGenerator) chartIdShort() string {
 	return g.config.RepoUrl
 }
 
-func (g repoHelmGenerator) login() {
+func (g repoHelmGenerator) login() error {
 	// login on helm repo is not supported
+	return nil
 }
 
 func (g repoHelmGenerator) addCredentials(in []string) []string {

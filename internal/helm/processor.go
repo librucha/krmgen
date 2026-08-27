@@ -7,23 +7,21 @@ import (
 	"github.com/librucha/krmgen/internal/tool"
 	cons "github.com/librucha/krmgen/internal/utils"
 	"gopkg.in/yaml.v3"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-func helmExecutable() string {
-	helm, found := os.LookupEnv(cons.EnvHelmExecutable)
-	if !found {
-		path, err := exec.LookPath("helm")
-		if err != nil {
-			log.Fatalf("helm executable not found in OS")
-		}
-		return path
+func helmExecutable() (string, error) {
+	if executable, found := os.LookupEnv(cons.EnvHelmExecutable); found && executable != "" {
+		return executable, nil
 	}
-	return helm
+	path, err := exec.LookPath("helm")
+	if err != nil {
+		return "", fmt.Errorf("helm executable not found in OS")
+	}
+	return path, nil
 }
 
 // runCommand is a seam: tests replace it to observe the helm invocation
@@ -69,7 +67,9 @@ func templateHelm(generator generator, workDir string) (string, error) {
 	args = generator.addRepoArgs(args)
 
 	if credentialsProvided(generator.getConfig()) {
-		generator.login()
+		if err := generator.login(); err != nil {
+			return "", err
+		}
 		args = generator.addCredentials(args)
 	}
 
@@ -79,9 +79,13 @@ func templateHelm(generator generator, workDir string) (string, error) {
 	}
 	args = append(args, valuesArgs...)
 
-	stdOut, stdErr, err := runCommand(helmExecutable(), args...)
+	executable, err := helmExecutable()
 	if err != nil {
-		return "", fmt.Errorf("run command %q finished with error %v. Error output %v", helmExecutable(), err, stdErr)
+		return "", err
+	}
+	stdOut, stdErr, err := runCommand(executable, args...)
+	if err != nil {
+		return "", fmt.Errorf("run command %q finished with error %v. Error output %v", executable, err, stdErr)
 	}
 	return stripHelmBanner(stdOut), nil
 }
