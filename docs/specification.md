@@ -48,15 +48,19 @@ rely on a specific non-zero value beyond "non-zero means failure".
 
 ### Error output
 
-A failing run writes a single line to stderr and exits with code 1:
+A failing run writes the cause to stderr and exits with code 1:
 
     Error: <what failed>
 
-Nothing else is printed: no timestamp, no log level, and no usage text.
+No timestamp, no log level, and no usage block. An unrecognised command is
+the one case that adds a second line, cobra's own `Run 'krmgen --help' for
+usage.` suggestion.
+
 Before phase 5 the format depended on which package raised the error - the
 kustomize processor used logrus (`time=... level=fatal msg="..."`) and the
-rest used the standard library's `log` (`2026/08/27 00:23:33 ...`). The
-message text itself did not change, only what surrounds it.
+rest used the standard library's `log` (`2026/08/27 00:23:33 ...`). Message
+wording is otherwise unchanged by the switch; the one exception is a typo
+fix (`crating directory` to `creating directory`).
 
 Callers matching on stderr should match on the message, not on the line shape.
 

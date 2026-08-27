@@ -33,6 +33,12 @@ func TestError_MissingPathArgument(t *testing.T) {
 	if res.exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", res.exitCode)
 	}
+	// The specification promises a failing run prints no usage block. Cobra
+	// dumps one on every RunE error unless SilenceUsage is set, so this is
+	// the assertion that keeps that setting from being dropped by accident.
+	if strings.Contains(res.stderr, "Usage:") || strings.Contains(res.stdout, "Usage:") {
+		t.Errorf("want no usage block on a failure\nstderr: %s\nstdout: %s", res.stderr, res.stdout)
+	}
 }
 
 // TestError_MultiConfigWithKustomization pins the deviation the specification
