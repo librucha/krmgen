@@ -533,6 +533,8 @@ func TestGolden_BothHelmRenderersAgree(t *testing.T) {
 		"helm-hooks",
 		"helm-only",
 		"helm-with-kustomize",
+		"multi-config",
+		"multi-config-kustomize",
 		"nested-kustomization",
 		"skip-patterns",
 		"template-functions",
@@ -551,10 +553,14 @@ func TestGolden_BothHelmRenderersAgree(t *testing.T) {
 			// its chart successfully through the helm phase and then fails at
 			// the kustomize step (kustomization.yaml is nested, and
 			// FindKustomizeFile deliberately does not search subdirectories -
-			// see errors_test.go). It stays in this list because the helm
-			// phase still ran on both backends and must have agreed before
-			// the pipeline failed; only the exit codes and stdout need to
-			// match between the two runs, not equal 0.
+			// see errors_test.go). multi-config-kustomize likewise renders
+			// both charts through the helm phase and then fails at the
+			// kustomize step (two configs registering the same
+			// kustomization.yaml - see TestGolden_BothBackendsAgreeOnErrors
+			// below). Both stay in this list because the helm phase still
+			// ran on both backends and must have agreed before the pipeline
+			// failed; only the exit codes and stdout need to match between
+			// the two runs, not equal 0.
 			viaLibrary := runScenario(t, name, extraEnv...)
 			viaBinary := runScenario(t, name, append(extraEnv, "KRMGEN_HELM_EXECUTABLE="+helmPath)...)
 

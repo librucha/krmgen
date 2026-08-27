@@ -350,11 +350,14 @@ spouští `helm template` jako subprocess. `selectRenderer()` volí podle
 to naplnilo R1 i R2 pro helm stejně, jako to fáze 4 udělala pro kustomize.
 
 Parita je naměřená, ne předpokládaná: `TestGolden_BothHelmRenderersAgree`
-(`test/golden/harness_test.go`) pustí sedm scénářů, které helm chart
+(`test/golden/harness_test.go`) pustí devět scénářů, které helm chart
 vyrenderují (`helm-hooks`, `helm-only`, `helm-with-kustomize`,
-`nested-kustomization`, `skip-patterns`, `template-functions`,
-`values-file`), oběma backendy a vyžaduje bajtově identický stdout a shodné
-exit kódy. `oci-public` má vlastní síťový sourozenec za build tagem `oci` —
+`multi-config`, `multi-config-kustomize`, `nested-kustomization`,
+`skip-patterns`, `template-functions`, `values-file`), oběma backendy a
+vyžaduje bajtově identický stdout a shodné exit kódy — `multi-config` a
+`multi-config-kustomize` (obě `krmgen-a.yaml`/`krmgen-b.yaml` deklarují helm
+charty) do tohoto výčtu chybělo v opravném kole 1 finální revize fáze 6;
+doplněno tam. `oci-public` má vlastní síťový sourozenec za build tagem `oci` —
 `TestOci_BothHelmRenderersAgree` (`test/golden/oci_test.go`) — protože
 hermetická sada nesmí sahat na síť. `bad-repo-scheme` do žádného z testů
 nepatří: selže v `newGenerator` dřív, než se vůbec vybere renderer, takže o
