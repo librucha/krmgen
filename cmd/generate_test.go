@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,33 +165,6 @@ func TestMergeSkipPatterns(t *testing.T) {
 	}
 }
 
-// fatalSentinel marks a panic raised by the fake fatalf, so an unrelated
-// panic inside the code under test is not silently reported as "fatal was
-// called" - that would turn a real crash into a passing test.
-type fatalSentinel struct{}
-
-func captureFatalf(t *testing.T, call func()) (called bool, message string) {
-	t.Helper()
-	original := fatalf
-	t.Cleanup(func() { fatalf = original })
-	fatalf = func(format string, v ...any) {
-		called = true
-		message = fmt.Sprintf(format, v...)
-		panic(fatalSentinel{})
-	}
-	defer func() {
-		r := recover()
-		if r == nil {
-			return
-		}
-		if _, ok := r.(fatalSentinel); !ok {
-			panic(r) // not our fatal - let the real failure surface
-		}
-	}()
-	call()
-	return
-}
-
 func TestCopySrcDir_EvaluatesTemplatesExceptSkipped(t *testing.T) {
 	src := t.TempDir()
 	write := func(rel, content string) {
@@ -207,7 +179,10 @@ func TestCopySrcDir_EvaluatesTemplatesExceptSkipped(t *testing.T) {
 	write("plain.yaml", `value: '{{ kubeEnv "TESTVAR" "fallback" }}'`)
 	write("certs/keep.pfx", `raw: {{ this is not a template }}`)
 
-	workDir := copySrcDir(src, []string{"*.pfx"})
+	workDir, err := copySrcDir(src, []string{"*.pfx"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
 
 	evaluated, err := os.ReadFile(filepath.Join(workDir, "plain.yaml"))
@@ -228,7 +203,10 @@ func TestCopySrcDir_EvaluatesTemplatesExceptSkipped(t *testing.T) {
 }
 
 func TestCopySrcDir_WorkDirIsPrivate(t *testing.T) {
-	workDir := copySrcDir(t.TempDir(), nil)
+	workDir, err := copySrcDir(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
 
 	info, err := os.Stat(workDir)
@@ -240,19 +218,19 @@ func TestCopySrcDir_WorkDirIsPrivate(t *testing.T) {
 	}
 }
 
-func TestCopyDir_BrokenTemplateIsFatal(t *testing.T) {
+func TestCopyDir_BrokenTemplateReturnsError(t *testing.T) {
 	src := t.TempDir()
 	if err := os.WriteFile(filepath.Join(src, "bad.yaml"), []byte("{{ .Unclosed "), 0600); err != nil {
 		t.Fatal(err)
 	}
 	dst := t.TempDir()
 
-	called, message := captureFatalf(t, func() { copyDir(src, dst, src, nil) })
-	if !called {
-		t.Fatal("expected a broken template to be fatal")
+	err := copyDir(src, dst, src, nil)
+	if err == nil {
+		t.Fatal("expected a broken template to return an error")
 	}
-	if !strings.Contains(message, "template evaluation") {
-		t.Errorf("message = %q, want it to name template evaluation", message)
+	if !strings.Contains(err.Error(), "template evaluation") {
+		t.Errorf("error = %q, want it to name template evaluation", err)
 	}
 }
 
@@ -271,9 +249,12 @@ func TestProcessWorkDir_PrintsOnlyKrmGenFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Stdout = w
-	processWorkDir(dir)
+	processErr := processWorkDir(dir)
 	_ = w.Close()
 	os.Stdout = stdout
+	if processErr != nil {
+		t.Fatal(processErr)
+	}
 
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(r); err != nil {

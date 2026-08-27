@@ -46,6 +46,20 @@ or other commands.
 krmgen currently does not distinguish error classes by exit code. Callers must not
 rely on a specific non-zero value beyond "non-zero means failure".
 
+### Error output
+
+A failing run writes a single line to stderr and exits with code 1:
+
+    Error: <what failed>
+
+Nothing else is printed: no timestamp, no log level, and no usage text.
+Before phase 5 the format depended on which package raised the error - the
+kustomize processor used logrus (`time=... level=fatal msg="..."`) and the
+rest used the standard library's `log` (`2026/08/27 00:23:33 ...`). The
+message text itself did not change, only what surrounds it.
+
+Callers matching on stderr should match on the message, not on the line shape.
+
 ## 2. Configuration
 
 krmgen looks for config files in the **top level** of the source directory (not
@@ -205,19 +219,20 @@ all passes so far, not just its own.
 Reproduced directly: two `kind: KrmGen` files plus one `kustomization.yaml` in
 the same source directory, each declaring a chart that helm renders as a
 `ConfigMap` with the same name. The first pass succeeds; the second pass's
-kustomize invocation fails fatally:
+kustomize invocation fails, and the process exits 1 with:
 
 ```
-level=fatal msg="run kubectl kustomize failed error: exit status 1 reason: error:
-accumulating resources: accumulation err='merging resources from '<uuid>.yml': may
-not add resource with an already registered id: ConfigMap.v1.[noGrp]/<name>.[noNs]':
-must build at directory: '<workdir>/<uuid>.yml': file is not directory"
+Error: processing config file <workdir>/krmgen-b.yaml failed error: run kustomize
+failed: accumulating resources: accumulation err='merging resources from
+'<uuid>.yml': may not add resource with an already registered id:
+ConfigMap.v1.[noGrp]/<name>.[noNs]': must build at directory:
+'<workdir>/<uuid>.yml': file is not directory
 ```
 
-The `run kubectl kustomize failed error: ...` wrapper shown above is the
-external backend's wording; the default embedded backend wraps the same
-underlying kustomize error differently, as `run kustomize failed: ...`. Both
-raise the same underlying kustomize error — verified by
+The `run kustomize failed: ...` wrapper shown above is the default embedded
+backend's wording; the external `kubectl kustomize` backend wraps the same
+underlying kustomize error differently, as `run kubectl kustomize failed
+error: ...`. Both raise the same underlying kustomize error — verified by
 `TestGolden_BothBackendsAgreeOnErrors` (`test/golden/harness_test.go`), see
 Section 6.
 
@@ -233,11 +248,10 @@ file when a kustomization file is also present, until this is addressed.
 ### Working directory lifecycle
 
 The working directory is created under the system temp directory with mode 0700
-and removed after a successful run.
-
-**Known deviation:** when rendering fails, the process exits before cleanup runs,
-leaving the working directory — including any rendered secrets — on disk. This is
-recorded as current behaviour; it is fixed in phase 3 of the refactoring plan.
+and removed when the run ends, whether it succeeds or fails. As of phase 5,
+cleanup is registered as soon as the directory exists, so a failure partway
+through rendering no longer leaves the working directory — including any
+rendered secrets — on disk.
 
 ## 4. Template functions
 
