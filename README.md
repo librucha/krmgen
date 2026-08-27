@@ -71,7 +71,7 @@ The key insight is step 1: **all files are Go-template-evaluated before Helm or 
 
 ## Prerequisites
 
-- [`helm`](https://helm.sh/docs/intro/install/) — must be in `PATH`
+- [`helm`](https://helm.sh/docs/intro/install/) — not required by default: Helm charts render through the library compiled into krmgen. Only needed if you opt into the external backend via `KRMGEN_HELM_EXECUTABLE` (see [Environment variables](#environment-variables))
 - [`kubectl`](https://kubernetes.io/docs/tasks/tools/) — not required by default: Kustomize renders through the library compiled into krmgen. Only needed if you opt into the external backend via `KRMGEN_KUBECTL_EXECUTABLE` (see [Environment variables](#environment-variables))
 
 ---
