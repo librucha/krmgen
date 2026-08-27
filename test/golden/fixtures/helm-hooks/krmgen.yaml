@@ -1,0 +1,10 @@
+apiVersion: krmgen.config.librucha.com/v1alpha1
+kind: KrmGen
+helm:
+  charts:
+    - name: hooked
+      repo: '{{ argocdEnv "CHART_REPO" }}'
+      releaseName: rel
+      version: 0.1.0
+      namespace: default
+      ignoreCredentials: true

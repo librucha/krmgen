@@ -1,0 +1,31 @@
+---
+# Source: hooked/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-hooked
+  namespace: default
+data:
+  message: "hook-hello"
+---
+# Source: hooked/templates/pre-install-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rel-hooked-pre-install
+  namespace: default
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: pre-install-job
+          image: busybox:1.36
+          command: ["sh", "-c", "echo pre-install"]
+
+

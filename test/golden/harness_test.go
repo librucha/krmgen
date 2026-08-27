@@ -73,9 +73,19 @@ func chartRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
-	pkg := exec.Command("helm", "package", filepath.Join(repoRoot(t), "test", "golden", "charts", "demo"), "-d", dir)
-	if out, err := pkg.CombinedOutput(); err != nil {
-		t.Fatalf("helm package failed: %v\n%s", err, out)
+	chartsDir := filepath.Join(repoRoot(t), "test", "golden", "charts")
+	charts, err := os.ReadDir(chartsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range charts {
+		if !c.IsDir() {
+			continue
+		}
+		pkg := exec.Command("helm", "package", filepath.Join(chartsDir, c.Name()), "-d", dir)
+		if out, err := pkg.CombinedOutput(); err != nil {
+			t.Fatalf("helm package %s failed: %v\n%s", c.Name(), err, out)
+		}
 	}
 	index := exec.Command("helm", "repo", "index", dir)
 	if out, err := index.CombinedOutput(); err != nil {
@@ -240,6 +250,18 @@ func TestGolden_HelmOnly(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
 	}
 	assertGolden(t, "helm-only", res.stdout)
+}
+
+// TestGolden_HelmHooks covers a chart carrying a helm.sh/hook annotation.
+// `helm template` prints hooks after the manifest, each behind its own
+// "# Source:" header, and a renderer that returns only the manifest drops
+// them silently - no other fixture would notice.
+func TestGolden_HelmHooks(t *testing.T) {
+	res := runScenario(t, "helm-hooks")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "helm-hooks", res.stdout)
 }
 
 func TestGolden_KustomizeOnly(t *testing.T) {
