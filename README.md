@@ -466,7 +466,7 @@ docker run --rm -v "$(pwd):/workspace" librucha/krmgen:latest krmgen generate /w
 
 | Variable | Description |
 |---|---|
-| `KRMGEN_HELM_EXECUTABLE` | Override path to `helm` binary |
+| `KRMGEN_HELM_EXECUTABLE` | Opt into the external `helm` backend: that path is used as helm. Unset (the default) renders through the Helm library compiled into krmgen instead (see specification) |
 | `KRMGEN_HELM_USERNAME` | Helm repo username (fallback if not set in `krmgen.yaml`) |
 | `KRMGEN_HELM_PASSWORD` | Helm repo password (fallback if not set in `krmgen.yaml`) |
 | `KRMGEN_KUBECTL_EXECUTABLE` | Opt into the external `kubectl kustomize` backend: that path is used as kubectl. Unset (the default) renders through the Kustomize library compiled into krmgen instead (see specification) |
@@ -489,7 +489,7 @@ See [Azure SDK authentication](https://learn.microsoft.com/en-us/azure/developer
 
 - Go 1.21+
 - [Task](https://taskfile.dev) (`brew install go-task`)
-- `helm` and `kubectl` in PATH — `kubectl` is not needed to build or run krmgen itself (Kustomize renders through the embedded library by default), but `task test` exercises the external `kubectl` backend too, for differential parity tests
+- `helm` and `kubectl` in PATH — neither is needed to build or run krmgen itself (Helm and Kustomize both render through embedded libraries by default), but `task test` needs both regardless: the golden harness packages fixture charts with `helm package`/`helm repo index`, and differential tests exercise the external `helm`/`kubectl` backends against the embedded ones
 
 ### Common tasks
 
@@ -515,7 +515,7 @@ task docker-build   # build Docker image locally (goreleaser snapshot)
 cmd/                    CLI commands (cobra)
 internal/
   config/               krmgen.yaml parsing and processing
-  helm/                 helm template execution (HTTP + OCI generators)
+  helm/                 helm chart rendering (embedded library by default, external helm opt-in; HTTP + OCI generators)
   kustomize/            Kustomize execution (embedded library by default, external kubectl opt-in)
   template/             Go template engine + all function providers
     azure/              Azure Key Vault, storage, identity providers
@@ -534,8 +534,8 @@ version/                Build-time version variable
 contract — CLI flags, exit codes, the rendering pipeline, every template
 function's exact behaviour (including known bugs and deviations from what
 this README describes at a glance), and the external-tool invocation. It is
-the reference used to verify parity when the underlying `helm`/`kubectl`
-binaries are replaced by embedded libraries in a later phase.
+the reference used to verify parity between the `helm`/`kubectl` binaries and
+the embedded libraries that replaced them as the default (Section 5 and 6).
 
 ---
 

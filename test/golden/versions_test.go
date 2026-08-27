@@ -15,8 +15,16 @@ import (
 // versions". On the default kustomize path, rendering behaviour is pinned to
 // the sigs.k8s.io/kustomize/api version compiled into krmgen (see
 // anchorKustomizeAPIVersion and TestEmbeddedKustomizeMatchesTheAnchor,
-// below), not to whatever kubectl happens to embed. The installed kubectl's
-// Kustomize version still has to match a reference too, because the same
+// below), not to whatever kubectl happens to embed. The same is true of the
+// default helm path since this phase: rendering behaviour is pinned to the
+// helm.sh/helm/v4 version compiled into krmgen (see anchorHelmLibraryVersion
+// and TestEmbeddedHelmMatchesTheAnchor, below), not to whatever helm binary
+// happens to be on PATH — anchorHelmVersion just below only governs the
+// external opt-in path (KRMGEN_HELM_EXECUTABLE). The two helm anchors agree
+// today (both name v4.2.4) by coincidence, not by construction: nothing keeps
+// go.mod's helm.sh/helm/v4 dependency and the reference external binary in
+// lockstep. The installed kubectl's Kustomize version still has to match a
+// reference too, because the same
 // goldens are also asserted against the external backend
 // (KRMGEN_KUBECTL_EXECUTABLE) by TestGolden_ExternalBackendMatchesTheGoldens
 // and compared against the embedded backend by TestGolden_BothBackendsAgree
@@ -133,6 +141,40 @@ func TestEmbeddedKustomizeMatchesTheAnchor(t *testing.T) {
 		}
 	}
 	t.Error("sigs.k8s.io/kustomize/api is not among the build dependencies")
+}
+
+// anchorHelmLibraryVersion is the helm.sh/helm/v4 module version compiled
+// into krmgen (pinned in go.mod), the version that actually renders every
+// golden scenario on the default path since this phase. anchorHelmVersion
+// above is a different anchor for a different path: it is `helm version
+// --short` output from the reference *external* binary, checked only when
+// KRMGEN_HELM_EXECUTABLE selects the binary renderer. Before this phase the
+// two happened to be the same helm build, so this distinction was invisible;
+// now that the embedded library is the default, only this anchor governs it.
+const anchorHelmLibraryVersion = "v4.2.4"
+
+// TestEmbeddedHelmMatchesTheAnchor is the helm sibling of
+// TestEmbeddedKustomizeMatchesTheAnchor above - same reasoning, same
+// debug/buildinfo.ReadFile approach, same reason runtime/debug.ReadBuildInfo()
+// from inside this test binary cannot be used (it reports zero deps for a
+// non-main package - see that test's comment for the full explanation).
+func TestEmbeddedHelmMatchesTheAnchor(t *testing.T) {
+	bin := binaryPath(t)
+	info, err := buildinfo.ReadFile(bin)
+	if err != nil {
+		t.Fatalf("reading build info from %s: %v", bin, err)
+	}
+	for _, dep := range info.Deps {
+		if dep.Path == "helm.sh/helm/v4" {
+			if dep.Version != anchorHelmLibraryVersion {
+				t.Errorf("helm.sh/helm/v4 is %s, goldens were generated against %s - "+
+					"this is a tooling change, not a product regression; verify the "+
+					"output before updating the anchor", dep.Version, anchorHelmLibraryVersion)
+			}
+			return
+		}
+	}
+	t.Error("helm.sh/helm/v4 is not among the build dependencies")
 }
 
 func runningKustomizeVersion() (string, error) {

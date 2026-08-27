@@ -125,15 +125,6 @@ func minimalEnv() []string {
 // URL, and these, never the ambient environment.
 func runScenario(t *testing.T, name string, extraEnv ...string) result {
 	t.Helper()
-	return runScenarioWithBinary(t, binaryPath(t), name, extraEnv...)
-}
-
-// runScenarioWithBinary is runScenario against an arbitrary krmgen binary.
-// runScenario is the sole caller today, always passing binaryPath(t); the
-// split stays because it keeps the fixture-copy/env-assembly logic separate
-// from the choice of binary.
-func runScenarioWithBinary(t *testing.T, bin, name string, extraEnv ...string) result {
-	t.Helper()
 
 	fixture := filepath.Join("fixtures", name)
 	workDir := filepath.Join(t.TempDir(), name)
@@ -143,7 +134,7 @@ func runScenarioWithBinary(t *testing.T, bin, name string, extraEnv ...string) r
 	// golden.yaml is the expectation, not an input
 	_ = os.Remove(filepath.Join(workDir, "golden.yaml"))
 
-	cmd := exec.Command(bin, "generate", workDir)
+	cmd := exec.Command(binaryPath(t), "generate", workDir)
 	cmd.Env = append(minimalEnv(), "ARGOCD_ENV_CHART_REPO="+chartRepo(t))
 	cmd.Env = append(cmd.Env, extraEnv...)
 

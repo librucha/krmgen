@@ -496,26 +496,54 @@ system-assigned equivalent.
 
 ## 5. External tool support matrix
 
-krmgen invokes `helm` unconditionally as an external binary. `kubectl` is
-invoked as an external binary only when `KRMGEN_KUBECTL_EXECUTABLE` is set;
-otherwise kustomize renders through the library compiled into krmgen
-(`internal/kustomize/builder_krusty.go`, `internal/kustomize/builder.go`).
-Which binary is used:
+krmgen invokes neither `helm` nor `kubectl` as an external binary by default.
+Both are opt-in: setting `KRMGEN_HELM_EXECUTABLE` selects the external `helm`
+binary (`selectRenderer`, `internal/helm/renderer.go`); setting
+`KRMGEN_KUBECTL_EXECUTABLE` selects `kubectl kustomize` (`selectBuilder`,
+`internal/kustomize/builder.go`). Left unset, both render through the library
+compiled into krmgen instead — helm via `helm.sh/helm/v4/pkg/action`
+(`sdkRenderer`, `internal/helm/renderer_sdk.go`), kustomize via
+`sigs.k8s.io/kustomize/api` (`krustyBuilder`,
+`internal/kustomize/builder_krusty.go`). Which binary is used:
 
 | Variable | Effect when set | Effect when unset |
 |---|---|---|
-| `KRMGEN_HELM_EXECUTABLE` | That path is used as helm | `helm` is looked up in `PATH` |
-| `KRMGEN_KUBECTL_EXECUTABLE` | That path is used as kubectl, and kustomize rendering goes through it | The kustomize version compiled into krmgen renders |
+| `KRMGEN_HELM_EXECUTABLE` | That path is used as helm | The helm library compiled into krmgen renders |
+| `KRMGEN_KUBECTL_EXECUTABLE` | That path is used as kubectl, and kustomize rendering goes through it | The kustomize library compiled into krmgen renders |
 
-`KRMGEN_HELM_EXECUTABLE` set to the empty string is treated the same as unset —
-`helm` is still looked up in `PATH` (`internal/helm/processor.go:17`), consistent
-with how `selectBuilder` treats an empty `KRMGEN_KUBECTL_EXECUTABLE`.
+`KRMGEN_HELM_EXECUTABLE` set to the empty string is treated the same as
+unset — `selectRenderer` (`internal/helm/renderer.go`) still selects the
+embedded library, consistent with how `selectBuilder` treats an empty
+`KRMGEN_KUBECTL_EXECUTABLE`. `helmExecutable()`
+(`internal/helm/processor.go:16-25`) does have its own fallback to a `helm`
+found on `PATH` when the variable is unset, but that branch is unreachable in
+the current call graph: both of its callers (`ociHelmGenerator.login`,
+`binaryRenderer.Render`) are reached only once `selectRenderer` has already
+chosen the external backend, which by construction only happens when the
+variable names a non-empty path.
+
+**Helm plugins and post-renderers are available only on the external
+binary.** Both run through the `helm` executable itself — a plugin is a
+subcommand `helm` shells out to, a post-renderer is a binary `helm template`
+pipes its output through — and neither has an equivalent when krmgen calls
+`helm.sh/helm/v4/pkg/action` directly. This is permanent, not a gap phase 6
+is expected to close later; see Section 6.
 
 krmgen embeds `sigs.k8s.io/kustomize/api` v0.21.1 (pinned in `go.mod`).
 Parity between the embedded backend and the external `kubectl` backend — see
 Section 6 — is enforced by `TestGolden_BothBackendsAgree` and
 `TestGolden_BothBackendsAgreeOnErrors` (`test/golden/harness_test.go`) and was
 last verified against kubectl v1.36.3, which embeds Kustomize v5.8.1.
+
+krmgen embeds `helm.sh/helm/v4` v4.2.4 (pinned in `go.mod`; see
+`anchorHelmLibraryVersion`, `test/golden/versions_test.go`, which asserts this
+version is what actually ships in the built binary). Parity between the
+embedded library and the external `helm` binary is enforced by
+`TestGolden_BothHelmRenderersAgree` (`test/golden/harness_test.go`) and its
+OCI-scenario sibling `TestOci_BothHelmRenderersAgree`
+(`test/golden/oci_test.go`, behind the `oci` build tag), and was last verified
+against the reference external helm build named by `anchorHelmVersion`
+(`test/golden/versions_test.go`), v4.2.4+g3900f43.
 
 ### Invocation
 
@@ -599,13 +627,17 @@ its credentials are carried only on the `template` command itself.
 
 | Tool | Supported | Verified against |
 |---|---|---|
-| helm | 3.8.0 and later, including 4.x | v3.8.2, v3.21.4, v4.2.4 |
+| helm (external binary backend only) | 3.8.0 and later, including 4.x | v3.8.2, v3.21.4, v4.2.4 |
+| helm (embedded library backend) | pinned in `go.mod`, not a range | v4.2.4 |
 | kubectl (external kustomize backend only) | any release providing `kubectl kustomize` | v1.36.3 / Kustomize v5.8.1 |
 
-**Why helm 3.8.0 is the floor.** OCI registry support became generally available
-in helm 3.8.0. Earlier releases treat it as experimental and refuse to act on an
-`oci://` reference unless `HELM_EXPERIMENTAL_OCI=1` is set in the environment,
-which krmgen does not set. Measured on helm 3.7.2:
+**Why helm 3.8.0 is the floor.** This floor applies to the external binary
+backend only — the embedded library is always `helm.sh/helm/v4` v4.2.4, well
+past the 3.8.0 floor, so it always supports OCI unconditionally. OCI registry
+support became generally available in helm 3.8.0. Earlier releases treat it
+as experimental and refuse to act on an `oci://` reference unless
+`HELM_EXPERIMENTAL_OCI=1` is set in the environment, which krmgen does not
+set. Measured on helm 3.7.2:
 
 ```
 Error: this feature has been marked as experimental and is not enabled by
@@ -662,29 +694,54 @@ motivation for adding the embedded backend (Section 5), which pins its
 kustomize version in `go.mod` instead and is the default since this phase.
 
 **`.Capabilities` is whatever the invoked helm defaults to.** krmgen never
-passes `--kube-version` or `--api-versions` (see Invocation, above), so a
-chart that branches on `.Capabilities.KubeVersion` or
-`.Capabilities.APIVersions` renders differently depending only on which helm
-binary is installed on the host — helm versions ship different built-in
-defaults for a client-only `template` run. This is invisible today because it
-never varies within a single host, but it is a named risk for phase 6: an
-embedded helm library must default to the same `.Capabilities` values as
-whichever external helm version it is being measured for parity against, or
-the two backends will disagree on any chart that reads `.Capabilities`.
+passes `--kube-version` or `--api-versions` on the external path (see
+Invocation, above), and the embedded renderer (`sdkRenderer.Render`,
+`internal/helm/renderer_sdk.go`) never sets `action.Install.KubeVersion` /
+`.APIVersions` either — both leave the same two fields at their zero value.
+The design doc named this a risk for phase 6 (`docs/superpowers/specs/2026-08-20-krmgen-refaktoring-design.md`,
+"Rizika a vědomé změny chování"): that an embedded library reimplementing
+helm's CLI might quietly default `.Capabilities` differently from the real
+`helm template` command. It does not: `pkg/cmd/template.go` and
+`internal/helm/renderer_sdk.go` both construct an `action.Install` and call
+its `RunWithContext` (`pkg/action/install.go`) — the *same* function, not a
+reimplementation — so leaving `KubeVersion`/`APIVersions` unset produces
+identical `.Capabilities` defaults on both backends whenever they run the same
+helm version, confirmed by reading `helm.sh/helm/v4@v4.2.4`'s
+`pkg/cmd/template.go` and `pkg/action/install.go` side by side. No golden
+fixture exercises this directly — none of the demo charts read
+`.Capabilities` — so this is a code-reading confirmation, not a test result.
+
+The risk that remains, and always did, is across *different* helm versions: a
+chart that branches on `.Capabilities.KubeVersion` or `.Capabilities.APIVersions`
+still renders differently depending on which helm version is invoked, because
+different helm versions ship different built-in defaults for a client-only
+`template` run. An external binary older or newer than the pinned v4.2.4
+embedded library is exactly such a case. This is not something krmgen
+controls or records.
 
 ### Version detection
 
-krmgen does not currently detect or report the version of the external tools it
-invokes. Adding a startup check that records both versions is a requirement for
-phase 6, where two backends must be told apart in bug reports.
+krmgen does not detect or report the version of the external tools it invokes
+at runtime, and phase 6 did not add such a check — this remains open for a
+later phase. What phase 6 added instead is a compile-time anchor, checked by
+the test suite rather than surfaced to a user: `anchorHelmLibraryVersion` and
+`TestEmbeddedHelmMatchesTheAnchor` (`test/golden/versions_test.go`) read the
+`helm.sh/helm/v4` version actually linked into the built krmgen binary and
+fail the test suite if it drifts from what the goldens were generated
+against, mirroring `anchorKustomizeAPIVersion` /
+`TestEmbeddedKustomizeMatchesTheAnchor` from phase 4. Both are safeguards for
+whoever regenerates goldens, not something `krmgen generate` prints or a user
+of a release binary ever sees. A user picking between backends in a bug
+report still has no `krmgen`-reported version for either one — only the
+docker image, the go.mod version this document names, or `helm version`/
+`kubectl version` on their own host, if they know which backend they used.
 
 ## 6. Backend parity exceptions
 
-The refactoring plan introduces a second, embedded backend for both helm and
-kustomize, selected by the absence of `KRMGEN_HELM_EXECUTABLE` and
-`KRMGEN_KUBECTL_EXECUTABLE`. Both backends are measured against the same golden
-files. Where they cannot agree, the difference is recorded here rather than
-treated as a defect:
+krmgen has a second, embedded backend for both helm and kustomize, selected by
+the absence of `KRMGEN_HELM_EXECUTABLE` and `KRMGEN_KUBECTL_EXECUTABLE`. Both
+backends are measured against the same golden files. Where they cannot agree,
+the difference is recorded here rather than treated as a defect:
 
 | Capability | External binary | Embedded library |
 |---|---|---|
@@ -692,9 +749,40 @@ treated as a defect:
 | Helm post-renderers | Available | **Never available** |
 | Kustomize version | Whatever kubectl ships | Pinned in `go.mod` |
 | Helm version | Whatever the host has | Pinned in `go.mod` |
+| OCI registry authentication | Writes credentials to disk, host-wide | In-memory, scoped to one render |
 
 Users depending on helm plugins or post-renderers must set
 `KRMGEN_HELM_EXECUTABLE` and keep the external backend.
+
+**OCI registry authentication uses a different mechanism on the two
+backends, not just a different call.** When credentials are available for an
+OCI chart, the external binary runs `helm registry login <registry-host>
+--username <u> --password <p>` as a separate process before `helm template`
+(`ociHelmGenerator.login`, `internal/helm/oci-generator.go`). This subprocess
+writes the credentials into helm's on-disk registry config file
+(`settings.RegistryConfig`, normally `~/.config/helm/registry/config.json` or
+wherever `HELM_REGISTRY_CONFIG` points) and they persist there after krmgen
+exits — any later `helm` invocation on that host, krmgen's or not, picks them
+up. The embedded library instead hands the same credentials to
+`registry.NewClient` via `registry.ClientOptBasicAuth(username, password)`
+(`ociHelmGenerator.registryClient`, `internal/helm/oci-generator.go`, called
+from `sdkRenderer.Render`, `internal/helm/renderer_sdk.go`), held only in
+that one in-memory `*registry.Client` for the duration of that chart's
+render; nothing is written to `settings.RegistryConfig`, which the embedded
+path only ever reads, and only reaches at all in the no-credentials fallback
+(e.g. `ignoreCredentials: true`, or an anonymous pull such as the
+`oci-public` golden scenario). Net effect: a host that renders an OCI chart
+with credentials via the external binary ends up with those credentials
+cached in helm's config file for every later invocation on that host; the
+same run via the embedded library leaves no such trace. This was verified by
+reading `registry.NewClient`/`ClientOptBasicAuth`
+(`helm.sh/helm/v4@v4.2.4/pkg/registry/client.go`) and `ociHelmGenerator.login`
+side by side, not by a test — asserting "no file was written" would require
+controlling `$HOME`/`HELM_REGISTRY_CONFIG` around a real `helm registry
+login` subprocess, out of scope here. Rendered *output* is unaffected: both
+backends render the `oci-public` scenario byte-identically
+(`TestOci_BothHelmRenderersAgree`, `test/golden/oci_test.go`, behind the
+`oci` build tag) — this is an authentication-mechanism difference only.
 
 Both kustomize backends are required to render byte-identical output on
 every scenario that renders successfully, and `TestGolden_BothBackendsAgree`
@@ -717,10 +805,14 @@ selects a backend, so that scenario never reaches either backend's code path
 and says nothing about backend parity. `TestError_TwoKustomizations`
 (`test/golden/errors_test.go`) covers it instead.
 
-The one thing that differs between the backends is the version: the external
-path renders with whatever kustomize the installed kubectl embeds, which on
-an older host may be far behind the pinned one. That is the trade the option
-exists to make.
+Where rendering succeeds on both, the one thing that differs between the
+kustomize backends is the version: the external path renders with whatever
+kustomize the installed kubectl embeds, which on an older host may be far
+behind the pinned one. That is the trade the option exists to make. The helm
+backends carry the same kind of version trade (Supported versions, Section 5)
+plus the OCI authentication difference recorded above; where they render
+successfully, output is otherwise byte-identical
+(`TestGolden_BothHelmRenderersAgree`, `test/golden/harness_test.go`).
 
 ## 7. Non-goals
 

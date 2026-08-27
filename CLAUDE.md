@@ -4,7 +4,7 @@
 
 `krmgen` is a CLI tool for generating Kubernetes Resource Model (KRM) YAML from Helm charts and Kustomize configs. It is written in Go (module `github.com/librucha/krmgen`).
 
-The core idea: take a `krmgen.yaml` config + optional `kustomization.yaml`, run `helm template` for every declared chart, optionally pipe the result through kustomize (rendered by the embedded library by default, or by `kubectl kustomize` when `KRMGEN_KUBECTL_EXECUTABLE` is set), and print the final YAML to stdout.
+The core idea: take a `krmgen.yaml` config + optional `kustomization.yaml`, render every declared helm chart (through the embedded `helm.sh/helm/v4` library by default, or by the `helm` binary when `KRMGEN_HELM_EXECUTABLE` is set), optionally pipe the result through kustomize (rendered by the embedded library by default, or by `kubectl kustomize` when `KRMGEN_KUBECTL_EXECUTABLE` is set), and print the final YAML to stdout.
 
 ## Architecture
 
@@ -26,7 +26,10 @@ internal/
     generator.go        → generator interface, OCI vs HTTP repo detection
     repo-generator.go   → HTTP repo helm generator
     oci-generator.go    → OCI registry helm generator
-    processor.go        → TemplateHelmCharts, runs `helm template` binary
+    processor.go        → TemplateHelmCharts orchestrates charts; shared values/credentials helpers
+    renderer.go          → Renderer interface, selectRenderer (embedded vs binary, keyed on KRMGEN_HELM_EXECUTABLE)
+    renderer_sdk.go       → embedded backend, helm.sh/helm/v4/pkg/action (default)
+    renderer_binary.go    → external backend, shells out to the helm binary
   kustomize/
     processor.go        → FindKustomizeFile, BuildKustomize (prepares the kustomization, then delegates to a Builder)
     builder.go          → Builder interface, selectBuilder (embedded vs kubectl, keyed on KRMGEN_KUBECTL_EXECUTABLE)
@@ -96,7 +99,7 @@ and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx` without a direct
 
 | Variable | Description |
 |---|---|
-| `KRMGEN_HELM_EXECUTABLE` | Override helm binary path |
+| `KRMGEN_HELM_EXECUTABLE` | Opt into the external helm backend: that path is used as helm. Unset (the default) renders through the helm library compiled into krmgen instead (see specification) |
 | `KRMGEN_HELM_USERNAME` | Helm repo username (fallback if not in config) |
 | `KRMGEN_HELM_PASSWORD` | Helm repo password (fallback if not in config) |
 | `KRMGEN_KUBECTL_EXECUTABLE` | Opt into the external kubectl backend for kustomize: that path is used as kubectl. Unset (the default) renders through the kustomize library compiled into krmgen instead (see specification) |
@@ -115,7 +118,7 @@ task docker-build   # goreleaser snapshot (no publish)
 task release        # goreleaser release + Docker push (needs DOCKER_USERNAME/PASSWORD)
 ```
 
-Required external tools: `helm` (in PATH or configured via `KRMGEN_HELM_EXECUTABLE`). `kubectl` is only needed if opting into the external kustomize backend via `KRMGEN_KUBECTL_EXECUTABLE`.
+Neither `helm` nor `kubectl` is required to build or run krmgen — both render through the libraries compiled in by default. `task test` needs both on PATH regardless: the golden harness packages fixture charts with `helm package`/`helm repo index`, and the differential parity tests exercise the external `KRMGEN_HELM_EXECUTABLE`/`KRMGEN_KUBECTL_EXECUTABLE` backends against the embedded ones.
 
 ## Release process
 
