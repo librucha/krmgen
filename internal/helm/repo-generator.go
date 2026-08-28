@@ -6,7 +6,9 @@ import (
 	"regexp"
 )
 
-var helmUrlRegexp = regexp.MustCompile(`\w+://([0-9a-zA-Z-_]+).*`)
+// helmUrlRegexp captures the host of an HTTP(S) chart repository URL. The dash
+// is last in the character class so it is a literal, not the start of a range.
+var helmUrlRegexp = regexp.MustCompile(`\w+://([0-9a-zA-Z._-]+).*`)
 
 type repoHelmGenerator struct {
 	config *types.HelmChart
