@@ -40,6 +40,11 @@ func NewGenerateCommand() *cobra.Command {
 	return command
 }
 
+// removeAll is a seam: tests replace it to observe the working-directory
+// cleanup-failure warning without needing a real read-only mount, following
+// the same pattern as runCommand in internal/helm/processor.go.
+var removeAll = os.RemoveAll
+
 // generate owns the working directory for its whole lifetime: the deferred
 // removal is registered immediately after the directory exists, so it runs on
 // every path out - including a failure part-way through processing, which
@@ -54,7 +59,7 @@ func generate(srcDir string, skipPatterns []string) (err error) {
 	workDir, err := copySrcDir(srcDir, skipPatterns)
 	if workDir != "" {
 		defer func() {
-			if rmErr := os.RemoveAll(workDir); rmErr != nil {
+			if rmErr := removeAll(workDir); rmErr != nil {
 				fmt.Fprintf(os.Stderr, "warning: could not remove working dir %s: %v; it may contain rendered secrets\n", workDir, rmErr)
 			}
 		}()

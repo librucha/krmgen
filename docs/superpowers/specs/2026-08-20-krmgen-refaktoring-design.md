@@ -147,7 +147,7 @@ jen rozhraní.
 | 3 | Knihovna šablon ven | `cloud-go-templates` v1 | **hotovo 2026-08-25**: goldeny beze změny (viz níže) |
 | 4 | kustomize → krusty | `Builder` + 2 impl. | **hotovo 2026-08-26**: goldeny beze změny, parita ověřena testem (viz níže) |
 | 5 | Kvalita kódu | `log.Fatal` → návratové chyby, sjednocené stderr, práva souborů | **hotovo 2026-08-27**: viz „Kvalita kódu — přiřazení k fázím" níže |
-| 6 | helm → SDK | `Renderer` + 2 impl. | naměřená parita → rozhodnutí jít/nejít |
+| 6 | helm → SDK | `Renderer` + 2 impl. | **hotovo 2026-08-27**: rozhodnutí jít — goldeny beze změny, parita ověřena testem, embedded je výchozí (viz níže) |
 
 Fáze 6 je jediná s reálnou možností „ne". Rozhodne se podle naměřené parity, ne dopředu.
 
@@ -338,13 +338,94 @@ je to nedbalost.
 Spec rozhodne, která strana se přizpůsobí. U `azUaIdClientId` je k úvaze přejmenování na
 `azClientId` s ponecháním starého jména jako alias.
 
+### Fáze 6 — výsledek
+
+Dokončeno 2026-08-27, rozhodnutí **jít**. `internal/helm` dostal rozhraní
+`Renderer` (`renderer.go`) se dvěma implementacemi: `sdkRenderer`
+(`renderer_sdk.go`), postavená na `helm.sh/helm/v4/pkg/action` v4.2.4
+pinnuté v `go.mod`, a `binaryRenderer` (`renderer_binary.go`), která dál
+spouští `helm template` jako subprocess. `selectRenderer()` volí podle
+`KRMGEN_HELM_EXECUTABLE` stejným vzorem jako `selectBuilder()` ve fázi 4
+(prázdný řetězec = nenastaveno) a od úlohy 4 této fáze je výchozí embedded —
+to naplnilo R1 i R2 pro helm stejně, jako to fáze 4 udělala pro kustomize.
+
+Parita je naměřená, ne předpokládaná: `TestGolden_BothHelmRenderersAgree`
+(`test/golden/harness_test.go`) pustí devět scénářů, které helm chart
+vyrenderují (`helm-hooks`, `helm-only`, `helm-with-kustomize`,
+`multi-config`, `multi-config-kustomize`, `nested-kustomization`,
+`skip-patterns`, `template-functions`, `values-file`), oběma backendy a
+vyžaduje bajtově identický stdout a shodné exit kódy — `multi-config` a
+`multi-config-kustomize` (obě `krmgen-a.yaml`/`krmgen-b.yaml` deklarují helm
+charty) do tohoto výčtu chybělo v opravném kole 1 finální revize fáze 6;
+doplněno tam. `oci-public` má vlastní síťový sourozenec za build tagem `oci` —
+`TestOci_BothHelmRenderersAgree` (`test/golden/oci_test.go`) — protože
+hermetická sada nesmí sahat na síť. `bad-repo-scheme` do žádného z testů
+nepatří: selže v `newGenerator` dřív, než se vůbec vybere renderer, takže o
+paritě backendů nic nevypovídá; pokrývá ho `errors_test.go`. Goldeny beze
+změny po celou fázi (`git diff --stat -- test/golden/fixtures/` prázdný na
+konci každé úlohy).
+
+Skutečný nalezený bug, ne jen golden shoda: první pokus o OCI cestu předával
+`ociHelmGenerator.chartId()` (repo URL + `"/"` + jméno chartu) jako referenci
+chartu pro `LocateChart`. Proti reálnému `oci-public` fixture
+(`oci://ghcr.io/stakater/charts/reloader`, jméno `reloader`) to zdvojilo
+poslední segment cesty a 404lo na ghcr.io. Oprava: předat `cfg.RepoUrl`
+samotné, přesně jak to dělá `binaryRenderer` (`ociHelmGenerator.addRepoArgs`).
+Nalezeno až proti skutečné síti (úloha 5) — hermetické testy ho neodhalily,
+protože `chartId()` se jinde v produkčním kódu používá jen na odvození
+registry hostu pro `helm registry login`, kde je zdvojené jméno neviditelné.
+
+**OCI autentizace se mezi backendy liší mechanismem, ne jen voláním.**
+Externí binárka spouští `helm registry login` jako subprocess, který
+credentials zapíše na disk do helmova registry configu — tam přežijí i po
+skončení krmgenu a sebere je jakékoli další `helm`. Embedded cesta předává
+stejné credentials `registry.NewClient` přes `registry.ClientOptBasicAuth`,
+drží je jen v paměti po dobu jednoho renderu a na disk nic nezapisuje.
+Vyrenderovaný výstup se neliší (`TestOci_BothHelmRenderersAgree` prochází),
+liší se jen kde credentials skončí. Zapsáno jako výjimka v
+`docs/specification.md`, sekce 5 a 6.
+
+**Riziko `.Capabilities` (viz sekce 6 níže) se ukázalo jako vyřešené
+konstrukcí, ne jako něco, co potřebovalo vlastní golden scénář.** Krmgen na
+žádné cestě nepředává `--kube-version`/`--api-versions`, takže `KubeVersion`/
+`APIVersions` zůstávají na `action.Install` nenastavené na obou cestách;
+protože `helm template` (`pkg/cmd/template.go`) i `sdkRenderer.Render` volají
+tutéž `RunWithContext` (`pkg/action/install.go`), ne dvě nezávislé
+implementace, defaulty se shodují automaticky, dokud je verze helmu stejná.
+Ověřeno čtením zdrojů `helm.sh/helm/v4@v4.2.4`, ne testem — žádný demo chart
+nečte `.Capabilities`.
+
+**Velikost.** Plánovaná čísla (spike z 2026-08-20, výše) byla odhad na
+darwin hostu; skutečné naměřené hodnoty (úloha 6, po ořezání
+`goreleaser`/Dockerfile) je třeba číst takhle:
+
+| platforma | binárka před | binárka po | násobek |
+|---|---|---|---|
+| linux/amd64 | 19,0 MB | 49,1 MB | 2,6× |
+| linux/arm64 | 17,6 MB | 45,7 MB | 2,6× |
+| darwin/arm64 | 20,7 MB | 63,6 MB | 3,1× |
+
+`goreleaser` staví primárně pro Linux, takže distribuovaná cena je **2,6×**,
+ne 3,1×; 63,7 MB (tento plán, výše, i dřívější verze tohoto dokumentu) je
+darwin číslo, ne cena, kterou platí uživatel binárky nebo Docker image.
+Modulů v grafu: 103 → 286. Docker image (`librucha/krmgen`, `apk add git
+helm kubectl` → `apk add git`): **283 MB → 97,2 MB (−66 %)**, ne −76 MB, jak
+plán odhadoval — alpine balíčky `helm`+`kubectl` (159 MB nekomprimovaně)
+váží víc, než plán počítal, takže úspora z jejich odstranění je větší, ne
+menší, než odhad; kompenzuje ji zase o něco větší vlastní binárka. Embedded
+varianta je pořád výrazně menší, jen ne v poměru, který plán čekal.
+
+`stripHelmBanner` (`internal/helm/renderer_binary.go`) zůstává živý — je to
+vlastnost jen externí cesty (embedded knihovna banner na stdout nikdy
+nepíše), ne mrtvý kód z doby před přechodem. Neodstraňovat.
+
 ## 6. Rizika a vědomé změny chování
 
 | Riziko | Ošetření |
 |---|---|
 | Jiná verze kustomize v krusty než v `kubectl` → jiný výstup | goldeny ukážou diff, schvaluje se ručně |
-| Helm SDK nenastaví výchozí `KubeVersion` a API verze jako CLI → charty s `.Capabilities` tiše změní výstup | explicitní dorovnání ve fázi 6, vlastní golden scénář |
-| Reimplementace registry auth, OCI pull a repo indexu pro SDK | za rozhraním; při neúspěchu se fáze 6 nenasadí |
+| Helm SDK nenastaví výchozí `KubeVersion` a API verze jako CLI → charty s `.Capabilities` tiše změní výstup | **hotovo 6**, jinak než plán čekal: nevzniklo vlastní golden, riziko odpadlo konstrukcí — SDK i CLI volají tutéž `RunWithContext`, ne dvě implementace (viz „Fáze 6 — výsledek" výše) |
+| Reimplementace registry auth, OCI pull a repo indexu pro SDK | **hotovo 6** — `ociHelmGenerator.registryClient` + `client.SetRegistryClient`, měřeno proti reálné síti (`TestOci_BothHelmRenderersAgree`); OCI autentizace se přesto liší mechanismem mezi backendy, zapsáno jako výjimka (viz výše) |
 | Změna výchozího backendu (R2) je breaking change | release notes, major verze |
 | Banner z Helmu v4 na stdout | strip zůstává natrvalo pro externí cestu |
 

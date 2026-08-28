@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -279,6 +280,50 @@ func TestCopyDir_BrokenTemplateReturnsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "template evaluation") {
 		t.Errorf("error = %q, want it to name template evaluation", err)
+	}
+}
+
+// TestGenerate_ReportsWorkingDirCleanupFailureButStillSucceeds closes the gap
+// phase 5 left behind: the warning path (generate, cmd/generate.go) was
+// exercised in practice only by a read-only mount, which the test suite
+// cannot rely on. removeAll is a seam over os.RemoveAll for exactly this -
+// it lets the test force the failure deterministically instead.
+func TestGenerate_ReportsWorkingDirCleanupFailureButStillSucceeds(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "krmgen.yaml"), []byte("kind: KrmGen\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	wantErr := errors.New("simulated: read-only mount")
+	original := removeAll
+	removeAll = func(string) error { return wantErr }
+	t.Cleanup(func() { removeAll = original })
+
+	stderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+
+	genErr := generate(src, nil)
+
+	_ = w.Close()
+	os.Stderr = stderr
+
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatal(err)
+	}
+
+	if genErr != nil {
+		t.Fatalf("a working-dir cleanup failure must not turn a successful run into a failing one, got: %v", genErr)
+	}
+	if !strings.Contains(buf.String(), "warning: could not remove working dir") {
+		t.Errorf("stderr = %q, want it to contain the documented warning", buf.String())
+	}
+	if !strings.Contains(buf.String(), wantErr.Error()) {
+		t.Errorf("stderr = %q, want it to name the underlying cleanup error %q", buf.String(), wantErr)
 	}
 }
 

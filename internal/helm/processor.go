@@ -50,83 +50,21 @@ func TemplateHelmCharts(helmConfig *types.Helm, workDir string) (string, error) 
 }
 
 func templateHelm(generator generator, workDir string) (string, error) {
-	config := generator.getConfig()
-
-	args := []string{
-		"template",
-		config.ReleaseName,
-		"--include-crds",
-	}
-	if config.Version != "" {
-		args = append(args, "--version", config.Version)
-	}
-	if config.Namespace != "" {
-		args = append(args, "--namespace", config.Namespace)
-	}
-
-	args = generator.addRepoArgs(args)
-
-	if credentialsProvided(generator.getConfig()) {
-		if err := generator.login(); err != nil {
-			return "", err
-		}
-		args = generator.addCredentials(args)
-	}
-
-	valuesArgs, err := getValuesArgs(config, workDir)
-	if err != nil {
-		return "", err
-	}
-	args = append(args, valuesArgs...)
-
-	executable, err := helmExecutable()
-	if err != nil {
-		return "", err
-	}
-	stdOut, stdErr, err := runCommand(executable, args...)
-	if err != nil {
-		return "", fmt.Errorf("run command %q finished with error %v. Error output %v", executable, err, stdErr)
-	}
-	return stripHelmBanner(stdOut), nil
+	renderer := selectRenderer()
+	return renderer.Render(generator.getConfig(), generator, workDir)
 }
 
-// helmBannerPrefixes are informational lines Helm v4 writes to stdout (not stderr)
-// before the rendered manifests when a chart is pulled from an OCI registry.
-// They are not valid YAML and break downstream processing (e.g. kustomize).
-var helmBannerPrefixes = []string{
-	"Pulled: ",
-	"Digest: ",
-	"Signed by: ",
-	"Chart Hash Verified: ",
-}
-
-// stripHelmBanner removes the Helm banner lines from the beginning of helm template output.
-func stripHelmBanner(output string) string {
-	for {
-		line, rest, _ := strings.Cut(output, "\n")
-		if !isHelmBannerLine(line) {
-			return output
-		}
-		output = rest
-	}
-}
-
-func isHelmBannerLine(line string) bool {
-	line = strings.TrimSuffix(line, "\r")
-	for _, prefix := range helmBannerPrefixes {
-		if strings.HasPrefix(line, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
-	var args []string
+// valueFiles resolves a chart's values into a list of file paths - the
+// declared values file, joined with workDir, followed by valuesInline
+// written out to a temp file. This is the single place that reads values;
+// each renderer formats the result its own way (the binary renderer turns
+// it into repeated --values flags, the SDK renderer feeds it to
+// values.Options.ValueFiles directly).
+func valueFiles(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
+	var files []string
 	valuesFile := helmChartConfig.ValuesFile
 	if valuesFile != "" {
-		filePath := filepath.Join(workDir, valuesFile)
-		args = append(args, "--values", filePath)
+		files = append(files, filepath.Join(workDir, valuesFile))
 	}
 	if len(helmChartConfig.ValuesInline) > 0 {
 		valuesInlineYaml, err := yaml.Marshal(helmChartConfig.ValuesInline)
@@ -138,7 +76,19 @@ func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, 
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, "--values", valuesInlineFile)
+		files = append(files, valuesInlineFile)
+	}
+	return files, nil
+}
+
+func getValuesArgs(helmChartConfig *types.HelmChart, workDir string) ([]string, error) {
+	files, err := valueFiles(helmChartConfig, workDir)
+	if err != nil {
+		return nil, err
+	}
+	var args []string
+	for _, f := range files {
+		args = append(args, "--values", f)
 	}
 	return args, nil
 }

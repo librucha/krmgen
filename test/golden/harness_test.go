@@ -73,9 +73,19 @@ func chartRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
-	pkg := exec.Command("helm", "package", filepath.Join(repoRoot(t), "test", "golden", "charts", "demo"), "-d", dir)
-	if out, err := pkg.CombinedOutput(); err != nil {
-		t.Fatalf("helm package failed: %v\n%s", err, out)
+	chartsDir := filepath.Join(repoRoot(t), "test", "golden", "charts")
+	charts, err := os.ReadDir(chartsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range charts {
+		if !c.IsDir() {
+			continue
+		}
+		pkg := exec.Command("helm", "package", filepath.Join(chartsDir, c.Name()), "-d", dir)
+		if out, err := pkg.CombinedOutput(); err != nil {
+			t.Fatalf("helm package %s failed: %v\n%s", c.Name(), err, out)
+		}
 	}
 	index := exec.Command("helm", "repo", "index", dir)
 	if out, err := index.CombinedOutput(); err != nil {
@@ -240,6 +250,18 @@ func TestGolden_HelmOnly(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
 	}
 	assertGolden(t, "helm-only", res.stdout)
+}
+
+// TestGolden_HelmHooks covers a chart carrying a helm.sh/hook annotation.
+// `helm template` prints hooks after the manifest, each behind its own
+// "# Source:" header, and a renderer that returns only the manifest drops
+// them silently - no other fixture would notice.
+func TestGolden_HelmHooks(t *testing.T) {
+	res := runScenario(t, "helm-hooks")
+	if res.exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0\nstderr: %s", res.exitCode, res.stderr)
+	}
+	assertGolden(t, "helm-hooks", res.stdout)
 }
 
 func TestGolden_KustomizeOnly(t *testing.T) {
@@ -474,6 +496,83 @@ func TestGolden_ExternalBackendMatchesTheGoldens(t *testing.T) {
 		t.Fatalf("exit code = %d\nstderr: %s", res.exitCode, res.stderr)
 	}
 	assertGolden(t, "kustomize-features", res.stdout)
+}
+
+// TestGolden_BothHelmRenderersAgree runs every scenario that renders a helm
+// chart through both helm backends and requires byte-identical stdout and
+// matching exit codes. This is the measurement task 4 of this phase depended
+// on before flipping selectRenderer's default from the binary to the
+// library (internal/helm/renderer.go); now it is the regression guard that
+// keeps the two backends interchangeable going forward. It is the sibling of
+// TestGolden_BothBackendsAgree above: same binary, same fixture, the only
+// variable is an environment variable.
+//
+// selectRenderer defaults to the embedded library and switches to the
+// external helm binary only when KRMGEN_HELM_EXECUTABLE names a non-empty
+// path, so the "library" run is the default, minimal environment
+// (minimalEnv, via runScenario, never sets KRMGEN_HELM_EXECUTABLE) and the
+// "binary" run sets it to the real helm on PATH. Both runs execute the exact
+// same production binary and code path - fixture copy, Go template
+// evaluation, chart discovery, TemplateHelmCharts, optional kustomize - so
+// the only thing that differs is which Renderer.Render implementation
+// actually rendered the chart(s).
+func TestGolden_BothHelmRenderersAgree(t *testing.T) {
+	helmPath, err := exec.LookPath("helm")
+	if err != nil {
+		t.Fatalf("helm is required to compare renderers: %v", err)
+	}
+
+	// Every golden scenario whose krmgen.yaml declares helm charts, except:
+	//   - bad-repo-scheme: fails in newGenerator (internal/helm/generator.go)
+	//     on an unsupported repo scheme before either renderer is ever
+	//     selected - it says nothing about renderer parity.
+	//   - oci-public: pulls from a real OCI registry over the network and is
+	//     gated behind the oci build tag (test/golden/oci_test.go); no test
+	//     here may reach the network.
+	for _, name := range []string{
+		"helm-hooks",
+		"helm-only",
+		"helm-with-kustomize",
+		"multi-config",
+		"multi-config-kustomize",
+		"nested-kustomization",
+		"skip-patterns",
+		"template-functions",
+		"values-file",
+	} {
+		t.Run(name, func(t *testing.T) {
+			var extraEnv []string
+			if name == "template-functions" {
+				// Mirrors TestGolden_TemplateFunctions: without this, the
+				// scenario still renders, but through a default value that
+				// exercises less of argocdEnv's fallback behaviour.
+				extraEnv = []string{"ARGOCD_ENV_MESSAGE=from-env"}
+			}
+
+			// Exit code is not required to be 0: nested-kustomization renders
+			// its chart successfully through the helm phase and then fails at
+			// the kustomize step (kustomization.yaml is nested, and
+			// FindKustomizeFile deliberately does not search subdirectories -
+			// see errors_test.go). multi-config-kustomize likewise renders
+			// both charts through the helm phase and then fails at the
+			// kustomize step (two configs registering the same
+			// kustomization.yaml - see TestGolden_BothBackendsAgreeOnErrors
+			// below). Both stay in this list because the helm phase still
+			// ran on both backends and must have agreed before the pipeline
+			// failed; only the exit codes and stdout need to match between
+			// the two runs, not equal 0.
+			viaLibrary := runScenario(t, name, extraEnv...)
+			viaBinary := runScenario(t, name, append(extraEnv, "KRMGEN_HELM_EXECUTABLE="+helmPath)...)
+
+			if viaBinary.exitCode != viaLibrary.exitCode {
+				t.Fatalf("exit codes disagree: binary=%d library=%d\nbinary stderr: %s\nlibrary stderr: %s",
+					viaBinary.exitCode, viaLibrary.exitCode, viaBinary.stderr, viaLibrary.stderr)
+			}
+			if viaBinary.stdout != viaLibrary.stdout {
+				t.Errorf("the two helm renderers disagree:\n%s", diff(viaBinary.stdout, viaLibrary.stdout))
+			}
+		})
+	}
 }
 
 // TestGolden_KustomizeFeatures covers the transformers the other scenarios

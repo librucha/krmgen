@@ -2,7 +2,7 @@
 
 ## Project summary
 
-CLI tool (`krmgen`) that generates Kubernetes YAML by running `helm template` + Kustomize (rendered by the embedded `sigs.k8s.io/kustomize/api` library by default, or by `kubectl kustomize` when `KRMGEN_KUBECTL_EXECUTABLE` is set) and evaluating Go templates in config files. Written in Go.
+CLI tool (`krmgen`) that generates Kubernetes YAML by rendering Helm charts (through the embedded `helm.sh/helm/v4` library by default, or by the `helm` binary when `KRMGEN_HELM_EXECUTABLE` is set) + Kustomize (rendered by the embedded `sigs.k8s.io/kustomize/api` library by default, or by `kubectl kustomize` when `KRMGEN_KUBECTL_EXECUTABLE` is set) and evaluating Go templates in config files. Written in Go.
 
 ## Key entry points
 
@@ -31,7 +31,7 @@ If `task` is not installed: `go build -o build/krmgen .` and `go test ./...`
 
 ## Important constraints
 
-- External binary `helm` must be present in PATH. `kubectl` is only needed if `KRMGEN_KUBECTL_EXECUTABLE` opts into the external Kustomize backend — the default path renders through the embedded library and needs no `kubectl`.
+- Neither `helm` nor `kubectl` is required at runtime by default: helm renders through the embedded `helm.sh/helm/v4` library unless `KRMGEN_HELM_EXECUTABLE` opts into the external binary, and Kustomize renders through the embedded library unless `KRMGEN_KUBECTL_EXECUTABLE` opts into `kubectl`. Both binaries are still needed to run the test suite (`task test`): the golden harness packages fixture charts with `helm package`, and differential tests exercise both external backends against the embedded ones.
 - Template functions `env` and `expandenv` are intentionally removed from sprig for security.
 - Azure providers use `azidentity.NewDefaultAzureCredential` — requires valid Azure auth in environment.
 - Production code returns errors up the call stack instead of calling `log.Fatal`; cobra prints the

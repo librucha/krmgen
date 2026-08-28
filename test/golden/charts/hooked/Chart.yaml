@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hooked
+description: Deterministic chart with a pre-install hook, used by the SDK renderer's hook-parity golden
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

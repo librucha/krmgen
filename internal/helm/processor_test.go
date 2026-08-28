@@ -176,6 +176,11 @@ func TestGetValuesArgs(t *testing.T) {
 }
 
 func TestTemplateHelmCharts_InvocationPerBackend(t *testing.T) {
+	// These tests mock runCommand and assert on the exact argv the binary
+	// renderer builds, so they must force selectRenderer to pick the binary
+	// renderer regardless of the library default (internal/helm/renderer.go).
+	t.Setenv(cons.EnvHelmExecutable, "/mock/helm")
+
 	tests := []struct {
 		name  string
 		chart types.HelmChart
@@ -234,6 +239,10 @@ func TestTemplateHelmCharts_InvocationPerBackend(t *testing.T) {
 }
 
 func TestTemplateHelmCharts_ConcatenatesInDeclarationOrder(t *testing.T) {
+	// Force the binary renderer - see comment in
+	// TestTemplateHelmCharts_InvocationPerBackend.
+	t.Setenv(cons.EnvHelmExecutable, "/mock/helm")
+
 	calls := 0
 	original := runCommand
 	t.Cleanup(func() { runCommand = original })
@@ -257,6 +266,10 @@ func TestTemplateHelmCharts_ConcatenatesInDeclarationOrder(t *testing.T) {
 }
 
 func TestTemplateHelmCharts_PropagatesFailure(t *testing.T) {
+	// Force the binary renderer - see comment in
+	// TestTemplateHelmCharts_InvocationPerBackend.
+	t.Setenv(cons.EnvHelmExecutable, "/mock/helm")
+
 	original := runCommand
 	t.Cleanup(func() { runCommand = original })
 	runCommand = func(name string, arg ...string) (string, string, error) {
@@ -274,6 +287,10 @@ func TestTemplateHelmCharts_PropagatesFailure(t *testing.T) {
 }
 
 func TestTemplateHelmCharts_StripsBannerBeforeConcatenating(t *testing.T) {
+	// Force the binary renderer - see comment in
+	// TestTemplateHelmCharts_InvocationPerBackend.
+	t.Setenv(cons.EnvHelmExecutable, "/mock/helm")
+
 	original := runCommand
 	t.Cleanup(func() { runCommand = original })
 	runCommand = func(name string, arg ...string) (string, string, error) {
@@ -294,6 +311,10 @@ func TestTemplateHelmCharts_StripsBannerBeforeConcatenating(t *testing.T) {
 }
 
 func TestTemplateHelm_LoginFailurePropagatesAndSkipsTemplate(t *testing.T) {
+	// Force the binary renderer - see comment in
+	// TestTemplateHelmCharts_InvocationPerBackend.
+	t.Setenv(cons.EnvHelmExecutable, "/mock/helm")
+
 	templateInvoked := false
 	original := runCommand
 	t.Cleanup(func() { runCommand = original })

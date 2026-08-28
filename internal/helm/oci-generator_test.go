@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"helm.sh/helm/v4/pkg/cli"
 )
 
 func Test_ociHelmGenerator_chartId(t *testing.T) {
@@ -126,4 +128,40 @@ func Test_ociHelmGenerator_login_success(t *testing.T) {
 	if !reflect.DeepEqual(gotArgs, want) {
 		t.Errorf("helm invoked with args = %v, want %v", gotArgs, want)
 	}
+}
+
+// Test_ociHelmGenerator_registryClient covers the seam sdkRenderer.Render
+// uses to authenticate an OCI pull on the embedded path (internal/helm/
+// renderer_sdk.go). registry.NewClient never makes a network call - it only
+// builds an in-memory client and a local credentials-store handle - so this
+// stays hermetic with or without real credentials.
+func Test_ociHelmGenerator_registryClient(t *testing.T) {
+	settings := cli.New()
+
+	t.Run("no credentials falls back to the credentials store", func(t *testing.T) {
+		g := newOciHelmGenerator(&types.HelmChart{
+			RepoUrl: "oci://registry.example.com/helm", Name: "mychart", IgnoreCredentials: true,
+		})
+		rc, err := g.registryClient(settings)
+		if err != nil {
+			t.Fatalf("registryClient() error = %v, want nil", err)
+		}
+		if rc == nil {
+			t.Fatal("registryClient() returned a nil client")
+		}
+	})
+
+	t.Run("explicit credentials build a client", func(t *testing.T) {
+		g := newOciHelmGenerator(&types.HelmChart{
+			RepoUrl: "oci://registry.example.com/helm", Name: "mychart",
+			Username: "user", Password: "pass",
+		})
+		rc, err := g.registryClient(settings)
+		if err != nil {
+			t.Fatalf("registryClient() error = %v, want nil", err)
+		}
+		if rc == nil {
+			t.Fatal("registryClient() returned a nil client")
+		}
+	})
 }
