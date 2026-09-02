@@ -10,11 +10,14 @@ jobs:
   publishFeature:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: '^1.20'
-          check-latest: true
+          # setup-go v6 tightened toolchain resolution, and '^1.20' predated
+          # go.mod's move to the post-1.21 patch-version format anyway - it
+          # cannot express the 1.26.0 the module now needs. Take the version
+          # from go.mod, the way the other workflows do.
+          go-version-file: go.mod
 
       - name: Build feature platforms
         run: |
