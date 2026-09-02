@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# .invalid never resolves (RFC 2606), so the fetch fails without touching the
+# network. The credential is fake; what matters is that it does not come back
+# out in the error.
+resources:
+  - https://user:LEAKED-PAT-MARKER-12345@git.invalid/org/_git/repo/apps/x?ref=main

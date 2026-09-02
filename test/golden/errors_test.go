@@ -243,3 +243,49 @@ func TestError_MultilineEnvValueIsRejectedOnBothBackends(t *testing.T) {
 		t.Errorf("stderr = %q, want the same rejection the embedded backend gives", res.stderr)
 	}
 }
+
+// patMarker is the fake credential in the remote-base-credentials fixture.
+const patMarker = "LEAKED-PAT-MARKER-12345"
+
+// TestError_RemoteBaseCredentialsAreMasked covers a reported credential
+// disclosure. A kustomization may pull a remote base over HTTPS with the
+// credential in the URL - resolved from a key vault by a template, so the
+// repository itself stores no secret - and when the fetch fails kustomize
+// echoes the resolved URL verbatim, twice: naming the resource it could not
+// accumulate, and quoting the git command line it ran. Under ArgoCD that
+// lands in the application's retained sync log. Both backends are checked;
+// they produce the same text.
+func TestError_RemoteBaseCredentialsAreMasked(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required to check the external backend: %v", err)
+	}
+
+	backends := []struct {
+		name string
+		env  []string
+	}{
+		{name: "embedded"},
+		{name: "external", env: []string{"KRMGEN_KUBECTL_EXECUTABLE=" + kubectlPath}},
+	}
+
+	for _, b := range backends {
+		t.Run(b.name, func(t *testing.T) {
+			res := runScenario(t, "remote-base-credentials", b.env...)
+			if res.exitCode != 1 {
+				t.Fatalf("exit code = %d, want 1\nstderr: %s", res.exitCode, res.stderr)
+			}
+			if strings.Contains(res.stderr, patMarker) {
+				t.Errorf("stderr leaked the credential:\n%s", res.stderr)
+			}
+			if strings.Contains(res.stdout, patMarker) {
+				t.Errorf("stdout leaked the credential:\n%s", res.stdout)
+			}
+			// Masked, not dropped: the repository still has to be
+			// identifiable or the error is not worth printing.
+			if !strings.Contains(res.stderr, "https://user:***@git.invalid/org/_git/repo") {
+				t.Errorf("stderr = %q, want the masked URL to name the repository", res.stderr)
+			}
+		})
+	}
+}
