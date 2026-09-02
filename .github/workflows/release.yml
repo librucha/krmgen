@@ -7,6 +7,10 @@ on:
   push:
     tags:
       - 'v*'
+  # Dry run: exercise the whole release path - QEMU, buildx, GPG, the docker
+  # images - without publishing anything. Without this the release job only
+  # ever runs when a tag is already cut, so a broken step is found too late.
+  workflow_dispatch:
 
 jobs:
   goreleaser:
@@ -49,7 +53,13 @@ jobs:
           # the config uses Pro-only features (dockerhub description sync)
           distribution: goreleaser-pro
           version: '~> v2'
-          args: release --clean
+          # --snapshot implies --skip=announce,publish,validate, so a manual
+          # run builds and packages everything (docker images included) and
+          # pushes none of it. The Docker Hub description sync is a publish of
+          # its own, hence the extra skip.
+          args: >-
+            release --clean
+            ${{ github.event_name == 'workflow_dispatch' && '--snapshot --skip=dockerhub' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}

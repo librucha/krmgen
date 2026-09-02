@@ -114,6 +114,8 @@ task test           # run tests with race detector and coverage
 task lint           # golangci-lint
 task check          # fmt + vet + lint + test
 task install        # go install to ~/go/bin
+task install-release # download the latest published GitHub release into ~/bin
+                    # (no build; override the target with INSTALL_DIR=)
 task docker-build   # goreleaser snapshot (no publish)
 task release        # goreleaser release + Docker push (needs DOCKER_USERNAME/PASSWORD)
 ```

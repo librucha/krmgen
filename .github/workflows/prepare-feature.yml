@@ -19,11 +19,28 @@ jobs:
           # from go.mod, the way the other workflows do.
           go-version-file: go.mod
 
+      # `make test` runs the golden-master suite in test/golden, which packages
+      # fixture charts with helm and compares the external kubectl backend
+      # against the embedded one. Both binaries have to be on PATH, pinned to
+      # the pair the goldens were generated with - see the Test job in go.yml.
+      - name: Set up helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v4.2.4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v5
+        with:
+          version: v1.36.3
+
       - name: Build feature platforms
         run: |
           make test
 
+      # Only this one tag is moved. `git push -f --tags` would force every
+      # local tag onto the remote, which on a runner that has fetched the
+      # release tags is a way to rewrite them by accident.
       - name: Create tag
         run: |
           git tag -f latest-snapshot
-          git push -f --tags
+          git push -f origin latest-snapshot
