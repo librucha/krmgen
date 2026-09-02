@@ -218,3 +218,7 @@ $RECYCLE.BIN/
 build
 dist/install/krmgen
 dist
+### krmgen ###
+# Local bug reports and scratch notes; they quote internal hostnames, vault
+# and repository names, so they must not be committed to a public repository.
+bug*.md
