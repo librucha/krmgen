@@ -88,6 +88,10 @@ func prepareKustomizeFile(kustomizeFile string, resourcesFile string, workDir st
 	if err != nil {
 		return fmt.Errorf("unmarshaling kustomize file %q failed error: %w", kustomizeFile, err)
 	}
+	if err := checkGeneratorEnvFiles(kustomizeFileYaml, filepath.Dir(kustomizeFile)); err != nil {
+		return err
+	}
+
 	res, ok := kustomizeFileYaml["resources"]
 	if !ok {
 		res = []any{}

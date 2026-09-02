@@ -2,6 +2,7 @@ package golden
 
 import (
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -136,5 +137,109 @@ func TestError_Contract(t *testing.T) {
 				t.Error("want the partial output that preceded the failure")
 			}
 		})
+	}
+}
+
+// secretMarker is the recognisable fragment of the secret value in the
+// secret-render-failure fixture. It must never reach stderr.
+const secretMarker = "LEAKED-SECRET-MARKER"
+
+// TestError_RenderFailureDoesNotLeakSecretValues covers a reported secret
+// disclosure: kustomize reports a resource it cannot serialize by prefixing
+// the reason with a %#v dump of the resource's entire map, so a failing
+// render used to print every value of a generated Secret to stderr - and,
+// under ArgoCD, into the application's sync log. Both backends are checked:
+// kubectl embeds the same kustomize and leaked the same dump.
+//
+// The fixture reaches that failure through a key long enough that kyaml folds
+// the line. The reported route - a multi-line value in an env file - no longer
+// reaches a backend at all; checkGeneratorEnvFiles rejects it first, which
+// TestError_MultilineEnvValueIsRejected covers.
+func TestError_RenderFailureDoesNotLeakSecretValues(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required to check the external backend: %v", err)
+	}
+
+	backends := []struct {
+		name string
+		env  []string
+	}{
+		{name: "embedded"},
+		{name: "external", env: []string{"KRMGEN_KUBECTL_EXECUTABLE=" + kubectlPath}},
+	}
+
+	for _, b := range backends {
+		t.Run(b.name, func(t *testing.T) {
+			res := runScenario(t, "secret-render-failure", b.env...)
+			if res.exitCode != 1 {
+				t.Fatalf("exit code = %d, want 1\nstderr: %s", res.exitCode, res.stderr)
+			}
+			if strings.Contains(res.stderr, secretMarker) {
+				t.Errorf("stderr leaked the secret value:\n%s", res.stderr)
+			}
+			if strings.Contains(res.stdout, secretMarker) {
+				t.Errorf("stdout leaked the secret value:\n%s", res.stdout)
+			}
+		})
+	}
+}
+
+// The embedded backend has the rendered resources in hand, so it can say
+// which one failed. That is the whole point of redacting rather than
+// dropping the error: the message must stay actionable.
+func TestError_RenderFailureNamesTheOffendingResource(t *testing.T) {
+	res := runScenario(t, "secret-render-failure")
+	if res.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1\nstderr: %s", res.exitCode, res.stderr)
+	}
+	if !strings.Contains(res.stderr, "Secret demo") {
+		t.Errorf("stderr = %q, want it to name the resource that could not be serialized", res.stderr)
+	}
+}
+
+// TestError_MultilineEnvValueIsRejected covers the second half of the same
+// report. An env file's .properties format cannot carry a newline: kustomize
+// truncates the value at the first line break and reads every following line
+// as a further key, so a key vault secret ends up both destroyed and written
+// out as an unencoded key name. kustomize means to reject those keys but its
+// validator is an unimplemented stub, so krmgen is the last place that can.
+func TestError_MultilineEnvValueIsRejected(t *testing.T) {
+	res := runScenario(t, "multiline-env-value")
+	if res.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1\nstderr: %s", res.exitCode, res.stderr)
+	}
+	if strings.Contains(res.stdout, secretMarker) {
+		t.Errorf("stdout contains the secret as a key - the render should not have happened:\n%s", res.stdout)
+	}
+	// The offending line is a fragment of the value, so the error names the
+	// file and the line rather than quoting it.
+	if strings.Contains(res.stderr, secretMarker) {
+		t.Errorf("stderr leaked the secret value:\n%s", res.stderr)
+	}
+	for _, want := range []string{"resources/secrets.properties", "line 2", `"files"`} {
+		if !strings.Contains(res.stderr, want) {
+			t.Errorf("stderr = %q, want it to contain %q", res.stderr, want)
+		}
+	}
+}
+
+// The check runs before a backend is selected, so it must behave the same
+// with the external one - otherwise opting into kubectl would opt out of the
+// protection.
+func TestError_MultilineEnvValueIsRejectedOnBothBackends(t *testing.T) {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		t.Fatalf("kubectl is required to check the external backend: %v", err)
+	}
+	res := runScenario(t, "multiline-env-value", "KRMGEN_KUBECTL_EXECUTABLE="+kubectlPath)
+	if res.exitCode != 1 {
+		t.Fatalf("exit code = %d, want 1\nstderr: %s", res.exitCode, res.stderr)
+	}
+	if strings.Contains(res.stderr, secretMarker) || strings.Contains(res.stdout, secretMarker) {
+		t.Errorf("the secret value reached the output\nstderr: %s\nstdout: %s", res.stderr, res.stdout)
+	}
+	if !strings.Contains(res.stderr, "is read as a key") {
+		t.Errorf("stderr = %q, want the same rejection the embedded backend gives", res.stderr)
 	}
 }

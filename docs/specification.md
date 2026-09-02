@@ -75,6 +75,46 @@ substring is unaffected by that extra wrapping.
 
 Callers matching on stderr should match on the message, not on the line shape.
 
+#### Rendered resources are never echoed into an error
+
+kustomize reports a resource it cannot serialize to YAML (`ResMap.AsYaml`,
+`sigs.k8s.io/kustomize/api/resmap/reswrangler.go`) by prefixing the real
+reason with a `%#v` dump of that resource's entire map. On a generated
+`Secret` that dump is every value in clear text, and krmgen used to wrap it
+verbatim — so a failing render printed the secrets it had just built to
+stderr, and under ArgoCD into the application's retained sync log. The same
+data is kept at mode 0600 on disk (see Working directory lifecycle), so
+printing it contradicted the rest of the tool.
+
+Neither backend propagates that dump any more:
+
+- **Embedded.** `internal/kustomize/builder_krusty.go` re-runs the
+  per-resource serialization itself, and reports the offending resource's
+  kind, namespace and name plus the parser's reason:
+  `rendering kustomize output failed: resource Secret demo could not be
+  serialized to YAML: yaml: did not find expected ',' or '}'`.
+- **External.** kubectl embeds the same kustomize and printed the same dump.
+  Across a subprocess boundary there is no resource list to inspect, so
+  `internal/kustomize/builder_kubectl.go` drops kubectl's stderr entirely
+  whenever it carries the dump, replacing it with a note pointing at the
+  embedded backend. Any other kubectl stderr is passed through unchanged.
+
+This is the one error path where the two backends deliberately differ in
+wording; `TestError_RenderFailureDoesNotLeakSecretValues` (`test/golden/errors_test.go`)
+asserts what must hold for both — exit code 1, and no secret value on either
+stream.
+
+The route the report reached this through — a multi-line value in a generator
+env file — is now rejected before a backend runs (see Generator env files are
+validated). The redaction still stands for every other way a rendered resource
+can fail to serialize, such as a key long enough for kyaml to fold the line.
+
+A failure of the render itself is the only known way rendered content reaches
+an error. Go's `text/template` reports an execution failure with the template
+expression and its position, never the output buffer, so the
+`template evaluation of file %s failed` error in `cmd/generate.go` does not
+carry partially rendered output.
+
 ## 2. Configuration
 
 krmgen looks for config files in the **top level** of the source directory (not
@@ -259,6 +299,50 @@ each pass: the second pass's printed block contained both). Either way, "each
 kustomization file is shared by more than one config file. This is recorded as
 current behaviour; a source directory should have at most one `kind: KrmGen`
 file when a kustomization file is also present, until this is addressed.
+
+### Generator env files are validated
+
+`secretGenerator` and `configMapGenerator` can read key/value pairs from an env
+file (`envs:`, or the deprecated singular `env:`). That file is in the
+`.properties` format, which has no way to carry a newline: kustomize truncates
+a multi-line value at the first line break and reads every following line as a
+further key with an empty value. So
+
+    creds={
+      "private_key": "TOP-SECRET",
+      "id": "x"
+    }
+
+becomes a Secret whose `creds` key holds base64 of `{` and whose remaining keys
+are the fragments of the credential, unencoded — visible in
+`kubectl get secret -o yaml` without a base64 step. kustomize intends to reject
+such keys (`keyValuesFromLine` calls `Validator.IsEnvVarName` on each one) but
+the implementation behind that call is an unimplemented stub returning nil
+(`FieldValidator.IsEnvVarName`,
+`sigs.k8s.io/kustomize/api/internal/validate/fieldvalidator.go`), so nothing
+catches it. krmgen is the last place that can: it is where the value arrives
+from a key vault via `azSec`.
+
+Before rendering, krmgen therefore rejects any env-file line whose key is not a
+valid ConfigMap/Secret key — `[-._a-zA-Z0-9]+`, the format the API server
+accepts (`internal/kustomize/envfiles.go`):
+
+    Error: processing config file <path> failed error: secretGenerator "demo":
+    env file "resources/secrets.properties" line 2 is read as a key, but it is
+    not a valid ConfigMap/Secret key. ...
+
+The offending line is a fragment of the value, so the message names the file and
+the line rather than quoting it. The fix is to write the value to its own file
+and reference it from the generator's `files:` field, which carries the content
+verbatim.
+
+The rule is the API server's key format, not the stricter env-var-name format,
+so it cannot reject a generator that renders to a manifest the cluster would
+have accepted — a key starting with a digit, for instance, keeps working. Only
+the kustomization krmgen builds is checked; env files reachable through a nested
+kustomization are resolved by kustomize itself and never pass through krmgen.
+The check runs before a backend is selected, so it applies to the external
+kubectl backend as well.
 
 ### Working directory lifecycle
 
@@ -772,9 +856,19 @@ the difference is recorded here rather than treated as a defect:
 | Kustomize version | Whatever kubectl ships | Pinned in `go.mod` |
 | Helm version | Whatever the host has | Pinned in `go.mod` |
 | OCI registry authentication | Writes credentials to disk, host-wide | In-memory, scoped to one render |
+| Unserializable rendered resource | Error is redacted wholesale | Error names the offending resource |
 
 Users depending on helm plugins or post-renderers must set
 `KRMGEN_HELM_EXECUTABLE` and keep the external backend.
+
+**A render error that would carry rendered content is redacted differently on
+the two backends.** Neither prints kustomize's `%#v` dump of a resource it
+could not serialize (see Error output, "Rendered resources are never echoed
+into an error"), but only the embedded backend has the resource list in hand
+and can therefore name the offending resource. Across the subprocess boundary
+the external backend can only drop kubectl's stderr and point at the embedded
+one. Exit code and the absence of rendered content are identical, and that is
+what `TestError_RenderFailureDoesNotLeakSecretValues` asserts for both.
 
 **OCI registry authentication uses a different mechanism on the two
 backends, not just a different call.** When credentials are available for an

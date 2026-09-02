@@ -158,3 +158,57 @@ func TestSelectBuilder_EmptyValueMeansEmbedded(t *testing.T) {
 		t.Errorf("selectBuilder() = %q, want the embedded backend for an empty value", got)
 	}
 }
+
+// The reported secret disclosure: ResMap.AsYaml reports a resource it cannot
+// serialize by prefixing the reason with a %#v dump of that resource's whole
+// map. Wrapping it propagated every value of a generated Secret into the
+// error. The key below is long enough that kyaml folds the line, which is
+// what makes the rendered resource unserializable in the first place.
+func TestKrustyBuilder_DoesNotLeakRenderedValuesOnASerializationFailure(t *testing.T) {
+	const marker = "LEAKED-SECRET-MARKER"
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("kustomization.yaml", "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\ngeneratorOptions:\n  disableNameSuffixHash: true\nsecretGenerator:\n  - name: demo\n    behavior: create\n    envs:\n      - secrets.properties\n")
+	write("secrets.properties", marker+strings.Repeat("A", 1400)+"=x\n")
+
+	_, err := newKrustyBuilder().Build(dir)
+	if err == nil {
+		t.Fatal("Build() error = nil, want the serialization failure to surface")
+	}
+	if strings.Contains(err.Error(), marker) {
+		t.Errorf("error leaked the rendered secret value: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Secret demo") {
+		t.Errorf("error = %v, want it to name the resource that could not be serialized", err)
+	}
+}
+
+func TestKubectlBuilder_RedactsTheRenderDumpFromStderr(t *testing.T) {
+	const marker = "LEAKED-SECRET-MARKER"
+	original := runCommand
+	t.Cleanup(func() { runCommand = original })
+	runCommand = func(name string, arg ...string) (string, string, error) {
+		dump := `error: map[string]interface {}{"apiVersion":"v1", "data":map[string]interface {}{"creds":"` +
+			marker + `"}}: yaml: did not find expected ',' or '}'`
+		return "", dump, errors.New("exit status 1")
+	}
+
+	_, err := newKubectlBuilder("kubectl").Build("/work")
+	if err == nil {
+		t.Fatal("Build() error = nil, want the failure to propagate")
+	}
+	if strings.Contains(err.Error(), marker) {
+		t.Errorf("error leaked the rendered secret value: %v", err)
+	}
+	if !strings.Contains(err.Error(), "redacted") {
+		t.Errorf("error = %v, want it to say the tool output was withheld", err)
+	}
+}
