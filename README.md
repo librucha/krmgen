@@ -198,7 +198,7 @@ Patterns use [`filepath.Match`](https://pkg.go.dev/path/filepath#Match) syntax. 
 A JSON schema for IDE autocompletion is available at:
 
 ```
-https://raw.githubusercontent.com/librucha/krmgen/master/krmgen-config-schema.json
+https://raw.githubusercontent.com/librucha/krmgen/main/krmgen-config-schema.json
 ```
 
 For JetBrains IDEs, add it in **Settings → Languages & Frameworks → Schemas and DTDs → JSON Schema Mappings**.

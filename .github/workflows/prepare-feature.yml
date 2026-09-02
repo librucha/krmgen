@@ -4,7 +4,10 @@ permissions:
 on:
   push:
     branches:
+      # Both spellings: the workflow was written for 'feature/**', but the
+      # branches this repository actually uses are named 'feat/**'.
       - 'feature/**'
+      - 'feat/**'
 
 jobs:
   publishFeature:
