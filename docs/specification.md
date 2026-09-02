@@ -109,6 +109,54 @@ env file — is now rejected before a backend runs (see Generator env files are
 validated). The redaction still stands for every other way a rendered resource
 can fail to serialize, such as a key long enough for kyaml to fold the line.
 
+#### URL credentials are masked in every error
+
+A kustomization may pull a remote base over HTTPS with the credential in the
+URL, typically resolved from a key vault by a template so the repository itself
+stores no secret:
+
+    resources:
+      - https://user:{{ azSec "vault" "git-password" }}@dev.azure.com/org/proj/_git/repo/apps/x?ref=main
+
+krmgen resolves templates before rendering, so by fetch time the URL carries
+the real token. When the fetch fails — a transient 503 upstream is enough —
+kustomize echoes the resolved URL verbatim, twice: once naming the resource it
+could not accumulate, once quoting the git command line it ran. Go's own
+`net/http` redacts the copy it formats; the two kustomize formats did reach
+stderr in full, and under ArgoCD that is the application's retained sync log.
+
+Every error leaving `generate` therefore passes through `redact.Error`
+(`internal/redact`), which rewrites the password of every URL in the message to
+`***`:
+
+    accumulating resources from 'https://user:***@git.invalid/org/_git/repo?ref=main':
+    failed to run '/usr/bin/git fetch --depth=1 https://user:***@git.invalid/org/_git/repo main'
+
+The repository stays identifiable, so the error is still worth printing. A URL
+carrying only a username is left alone — a username is not a credential. The
+masked error is a new error rather than a wrapper, so the original is not one
+`Unwrap` away; an error with nothing to mask is returned untouched and keeps
+its identity for `errors.Is`. Both backends are covered:
+`TestError_RemoteBaseCredentialsAreMasked` (`test/golden/errors_test.go`)
+asserts it for each.
+
+Two exposures this does **not** close, both outside krmgen's reach:
+
+- **The credential is in git's argv.** kustomize fetches a remote base by
+  running `git fetch --depth=1 <resolved URL> <ref>`, so for the duration of
+  the fetch the token is visible to anything that can read the process table on
+  that host. Closing it would need kustomize to use `GIT_ASKPASS` or a
+  credential helper.
+- **kustomize writes to `os.Stderr` directly**, bypassing the returned error
+  (`internal/target/kusttarget.go`). In the pinned version those messages are
+  fixed deprecation strings holding no user data, so nothing leaks through that
+  channel today — but a message that carried a URL would not be masked.
+
+The same shape exists in the external helm backend, which passes
+`--username`/`--password` on helm's command line (`internal/helm/generator.go`)
+and so puts them in argv too; the embedded backend keeps them in memory (see
+Backend parity exceptions).
+
 A failure of the render itself is the only known way rendered content reaches
 an error. Go's `text/template` reports an execution failure with the template
 expression and its position, never the output buffer, so the

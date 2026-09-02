@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/librucha/krmgen/internal/config"
+	"github.com/librucha/krmgen/internal/redact"
 	"github.com/librucha/krmgen/internal/template"
 	cons "github.com/librucha/krmgen/internal/utils"
 	"github.com/spf13/cobra"
@@ -31,7 +32,13 @@ func NewGenerateCommand() *cobra.Command {
 			}
 			configPatterns := config.ReadSkipPatterns(srcDir)
 			merged := mergeSkipPatterns(configPatterns, skipPatterns)
-			return generate(srcDir, merged)
+			// Last stop before cobra prints the error. A kustomization may
+			// pull a remote base over HTTPS with the credential embedded in
+			// the URL - typically resolved from a key vault by a template -
+			// and kustomize echoes that URL verbatim into its error, twice:
+			// once naming the resource it could not accumulate, once quoting
+			// the git command line it ran.
+			return redact.Error(generate(srcDir, merged))
 		},
 	}
 
