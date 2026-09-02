@@ -84,12 +84,24 @@ The key insight is step 1: **all files are Go-template-evaluated before Helm or 
 
 Download the latest binary for your platform from [GitHub Releases](https://github.com/librucha/krmgen/releases/latest).
 
-```bash
-# Linux amd64
-curl -L https://github.com/librucha/krmgen/releases/latest/download/krmgen_linux_x86_64.tar.gz | tar xz && sudo mv krmgen /usr/local/bin/
+Release archives are named `krmgen_<version>_<os>_<arch>.tar.gz`, so the
+version has to be part of the URL:
 
-# Linux arm64
-curl -L https://github.com/librucha/krmgen/releases/latest/download/krmgen_linux_arm64.tar.gz | tar xz && sudo mv krmgen /usr/local/bin/
+```bash
+VERSION=$(curl -fsSL https://api.github.com/repos/librucha/krmgen/releases/latest \
+  | sed -n 's/.*"tag_name" *: *"v\([^"]*\)".*/\1/p')
+
+# Linux amd64 (use linux_arm64 on arm, darwin_arm64 / darwin_x86_64 on macOS)
+curl -fsSL "https://github.com/librucha/krmgen/releases/download/v${VERSION}/krmgen_${VERSION}_linux_x86_64.tar.gz" \
+  | tar xz && sudo mv krmgen /usr/local/bin/
+```
+
+With the repository checked out, [Task](https://taskfile.dev) does the same
+thing - platform detection, checksum verification and all - in one command:
+
+```bash
+task install-release                          # installs to ~/bin
+task install-release INSTALL_DIR=/usr/local/bin
 ```
 
 ### Docker
@@ -500,8 +512,9 @@ task build          # compile binary to build/krmgen
 task test           # run tests with race detector and coverage
 task lint           # run golangci-lint
 task check          # fmt + vet + lint + test
-task install        # install to ~/go/bin
-task docker-build   # build Docker image locally (goreleaser snapshot)
+task install         # build from source and install to ~/go/bin
+task install-release # download the latest published release into ~/bin
+task docker-build    # build Docker image locally (goreleaser snapshot)
 ```
 
 ### Adding a new template function

@@ -11,22 +11,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # goreleaser derives the snapshot version from `git describe`, so it
+          # needs the tags and the history behind them
+          fetch-depth: 0
       - uses: actions/setup-go@v7
         with:
-          # setup-go v6 tightened toolchain resolution, and '^1.20' predated
-          # go.mod's move to the post-1.21 patch-version format anyway - it
-          # cannot express the 1.26.0 the module now needs. Take the version
-          # from go.mod, the way the other workflows do.
           go-version-file: go.mod
 
-      - name: Build feature platforms
-        run: |
-          sudo apt-get install rhash -y
-          make all-dist CLI_PLATFORMS="darwin-amd64 linux-amd64"
+      # This replaced `make all-dist CLI_PLATFORMS=...`, a target the Makefile
+      # never had - the job could not have worked as written. Building the
+      # snapshot through the same goreleaser config the real release uses
+      # means a prerelease carries archives and a checksums.txt with exactly
+      # the same layout as a tagged release, so anything that consumes one
+      # (Taskfile's install-release, for instance) consumes the other.
+      # Docker images, GPG signing and the Docker Hub sync stay with real
+      # releases: none of them makes sense for a throwaway snapshot.
+      - name: Build snapshot archives
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser-pro
+          version: '~> v2'
+          args: release --clean --snapshot --skip=docker,dockerhub,sign
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
-          files: build/*
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
           prerelease: true
           fail_on_unmatched_files: true
