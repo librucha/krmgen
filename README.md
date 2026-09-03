@@ -23,6 +23,7 @@ Designed for GitOps pipelines (ArgoCD, Flux) where you need fully-rendered, stat
 - [Examples](#examples)
 - [Docker](#docker)
 - [Environment variables](#environment-variables)
+- [Secret handling](#secret-handling)
 - [Development](#development)
 - [Specification](#specification)
 
@@ -67,6 +68,7 @@ The key insight is step 1: **all files are Go-template-evaluated before Helm or 
 - **Local file inclusion** — embed file contents into templates with `readF`
 - **Skip patterns** — exclude binary or generated files from template evaluation via glob patterns (`*.pfx`, `assets/*.png`)
 - **OCI registry support** — Helm charts from OCI registries (`oci://`)
+- **Secret-safe diagnostics** — a failing run never echoes rendered resources or a URL password to stderr (see [Secret handling](#secret-handling))
 - **Docker image** — `librucha/krmgen` available for CI pipelines
 
 ---
@@ -497,6 +499,66 @@ See [Azure SDK authentication](https://learn.microsoft.com/en-us/azure/developer
 
 ---
 
+## Secret handling
+
+krmgen resolves templates before anything renders, so from that point on its
+working files and its output can hold real secrets. Three guarantees follow, all
+of them since 1.0.x:
+
+**Nothing readable outside your user.** The working directory is created under
+the system temp directory with mode 0700 and its files with 0600, and it is
+removed when the run ends — success or failure. If the removal itself fails, the
+run still succeeds and a warning on stderr names the directory left behind.
+
+**Errors never echo rendered resources.** When kustomize cannot serialize a
+resource it reports the failure by dumping that resource's entire map, which for
+a generated `Secret` is every value in clear text. krmgen replaces that with the
+resource's kind, namespace and name plus the underlying reason.
+
+**Errors never echo a URL password.** A remote base can carry a credential in
+its URL:
+
+```yaml
+resources:
+  - https://user:{{ azSec "vault" "git-password" }}@dev.azure.com/org/proj/_git/repo/apps/x?ref=main
+```
+
+If the fetch fails — a transient outage upstream is enough — kustomize quotes
+the resolved URL back. krmgen masks the password in every URL of every error:
+`https://user:***@dev.azure.com/...`. The repository stays identifiable, so the
+error is still actionable.
+
+> Note: the credential is still visible in the process table while the fetch
+> runs, because kustomize passes it to `git` on the command line. That is
+> outside krmgen's control — see the specification for details.
+
+### Multi-line values in generator env files are rejected
+
+`secretGenerator` / `configMapGenerator` can read values from an env file
+(`envs:`). That file is in `.properties` format, which cannot carry a newline:
+kustomize truncates the value at the first line break and reads every following
+line as another key. A key vault secret would end up both destroyed and written
+into the manifest as an unencoded key name.
+
+krmgen refuses to render that:
+
+```
+Error: ... secretGenerator "demo": env file "resources/secrets.properties" line 2
+is read as a key, but it is not a valid ConfigMap/Secret key. ...
+```
+
+Put such a value in its own file and reference it from `files:` instead, which
+carries the content verbatim:
+
+```yaml
+secretGenerator:
+  - name: demo
+    files:
+      - creds=resources/creds.json
+```
+
+---
+
 ## Development
 
 ### Requirements
@@ -532,14 +594,21 @@ internal/
   config/               krmgen.yaml parsing and processing
   helm/                 helm chart rendering (embedded library by default, external helm opt-in; HTTP + OCI generators)
   kustomize/            Kustomize execution (embedded library by default, external kubectl opt-in)
+  redact/               masks URL passwords in anything krmgen prints
   template/             Go template engine + all function providers
-    azure/              Azure Key Vault, storage, identity providers
     argocd/             ArgoCD env var provider
     kube/               Kubernetes env var provider
     files/              Local file reader
-  utils/                Shared constants
+    krmgen/             krmgenVer / krmgenGenerated
+  tool/                 RunCommand wrapper for the external binaries
+  utils/                Shared constants and file modes
 version/                Build-time version variable
 ```
+
+The Azure functions (`azSec`, `azCert`, the `azPfx*` family, …) are **not** in
+this repository — they come from
+[`cloud-go-templates`](https://github.com/librucha/cloud-go-templates), which
+krmgen registers into the template engine.
 
 ---
 
