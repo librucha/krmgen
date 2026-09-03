@@ -4,7 +4,7 @@ This document defines the contract of krmgen: what it accepts, what it produces,
 and what guarantees hold. It is the reference against which implementation changes
 are measured — if behaviour differs from this document, one of the two is a bug.
 
-Version: applies to krmgen 0.x. Status: draft.
+Version: applies to krmgen 1.0.x (current release 1.0.2). Status: current — this is the released contract, not a proposal.
 
 ## 1. CLI contract
 
