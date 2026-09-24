@@ -70,6 +70,7 @@ dockers_v2:
       "org.opencontainers.image.source": "{{.GitURL}}"
       "org.opencontainers.image.url": "https://hub.docker.com/r/librucha/krmgen"
       "org.opencontainers.image.documentation": "https://github.com/librucha/krmgen#readme"
+      "org.opencontainers.image.licenses": "MIT"
       "org.opencontainers.image.vendor": "librucha@gmail.com"
 
 signs:
