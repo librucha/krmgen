@@ -64,10 +64,12 @@ dockers_v2:
     labels:
       "org.opencontainers.image.created": "{{.Date}}"
       "org.opencontainers.image.title": "{{.ProjectName}}"
-      "org.opencontainers.image.description": "CLI tool for generate Kubernetes Resource Model from helm and kustomization together"
+      "org.opencontainers.image.description": "Render Helm charts and Kustomize overlays with Go templates into static Kubernetes YAML"
       "org.opencontainers.image.revision": "{{.FullCommit}}"
       "org.opencontainers.image.version": "{{.Version}}"
       "org.opencontainers.image.source": "{{.GitURL}}"
+      "org.opencontainers.image.url": "https://hub.docker.com/r/librucha/krmgen"
+      "org.opencontainers.image.documentation": "https://github.com/librucha/krmgen#readme"
       "org.opencontainers.image.vendor": "librucha@gmail.com"
 
 signs:
@@ -102,7 +104,19 @@ release:
   make_latest: true
   name_template: "{{ .ProjectName }} {{ .Version }}"
 
+# Docker Hub repository overview (Pro). `docker push` cannot set it, so this
+# pipe calls the Hub API after the images are published. Without `images`
+# the pipe has nothing to update - which is why the Hub page used to be empty.
 dockerhub:
-  - description: "CLI tool for generate Kubernetes Resource Model from helm and kustomization together"
+  - images:
+      - librucha/krmgen
+    # username defaults to DOCKER_USERNAME, the token to DOCKER_PASSWORD -
+    # both already exported by the release workflow. The account needs
+    # editor rights on the repository.
+    # Docker Hub limit: 100 characters.
+    description: "Render Helm charts and Kustomize overlays with Go templates into static Kubernetes YAML"
+    full_description:
+      from_file:
+        path: ./docs/dockerhub.md
 
 

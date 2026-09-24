@@ -128,6 +128,8 @@ Neither `helm` nor `kubectl` is required to build or run krmgen — both render 
 - Managed by **goreleaser** (`.goreleaser.yaml`)
 - Builds for `linux/amd64` and `linux/arm64`
 - Docker image: `librucha/krmgen` on Docker Hub
+- Docker Hub overview comes from `docs/dockerhub.md`, pushed by the GoReleaser Pro
+  `dockerhub` pipe; keep it free of `{{` (guarded by `dockerhub_doc_test.go`)
 - Version injected via `-X main.version={{.Version}}` ldflags
 
 ## Testing
