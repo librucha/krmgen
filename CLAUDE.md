@@ -130,6 +130,10 @@ Neither `helm` nor `kubectl` is required to build or run krmgen — both render 
 - Docker image: `librucha/krmgen` on Docker Hub
 - Docker Hub overview comes from `docs/dockerhub.md`, pushed by the GoReleaser Pro
   `dockerhub` pipe; keep it free of `{{` (guarded by `dockerhub_doc_test.go`)
+- Homebrew cask pushed to `librucha/homebrew-tap` (`homebrew_casks`, token
+  `HOMEBREW_TAP_GITHUB_TOKEN`); prereleases skip the tap
+- darwin binaries signed + notarized (`notarize.macos`, `MACOS_SIGN_*` /
+  `MACOS_NOTARY_*` secrets); disabled when `MACOS_SIGN_P12` is unset
 - Version injected via `-X main.version={{.Version}}` ldflags
 
 ## Testing

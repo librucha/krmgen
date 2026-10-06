@@ -25,6 +25,26 @@ builds:
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
 
+# Sign and notarize the darwin binaries with the Developer ID certificate.
+# Runs on the Linux release runner (no Xcode needed). Disabled when the
+# certificate is absent, so local builds and snapshots still work.
+notarize:
+  macos:
+    - ids: [ krmgen ]
+      enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      sign:
+        # base64 of the "Developer ID Application" .p12 export
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        # App Store Connect API key (Users and Access > Integrations)
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        # base64 of the AuthKey_<key_id>.p8 file
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
+
 archives:
   - id: default
     formats: [ tar.gz ]
@@ -70,6 +90,7 @@ dockers_v2:
       "org.opencontainers.image.source": "{{.GitURL}}"
       "org.opencontainers.image.url": "https://hub.docker.com/r/librucha/krmgen"
       "org.opencontainers.image.documentation": "https://github.com/librucha/krmgen#readme"
+      "org.opencontainers.image.licenses": "MIT"
       "org.opencontainers.image.vendor": "librucha@gmail.com"
 
 signs:
@@ -103,6 +124,24 @@ release:
   prerelease: auto
   make_latest: true
   name_template: "{{ .ProjectName }} {{ .Version }}"
+
+# Homebrew cask in librucha/homebrew-tap: `brew install librucha/tap/krmgen`.
+# GITHUB_TOKEN of the release workflow cannot push to another repository,
+# hence the dedicated token with contents:write on the tap.
+homebrew_casks:
+  - name: krmgen
+    repository:
+      owner: librucha
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/librucha/krmgen
+    description: Render Helm charts and Kustomize overlays with Go templates into static Kubernetes YAML
+    license: MIT
+    commit_msg_template: "chore(krmgen): update cask to {{ .Tag }}"
+    # prereleases must not move what `brew install` resolves to
+    skip_upload: auto
+    # No quarantine-stripping hook: the darwin binaries are signed and
+    # notarized (see `notarize`), so Gatekeeper accepts them as downloaded.
 
 # Docker Hub repository overview (Pro). `docker push` cannot set it, so this
 # pipe calls the Hub API after the images are published. Without `images`

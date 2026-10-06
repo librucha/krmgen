@@ -162,3 +162,7 @@ the full configuration reference are documented in the
 | `KRMGEN_HELM_EXECUTABLE` | Use an external `helm` binary instead of the embedded library |
 | `KRMGEN_KUBECTL_EXECUTABLE` | Use external `kubectl kustomize` instead of the embedded library |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, … | Azure SDK authentication |
+
+## License
+
+[MIT](https://github.com/librucha/krmgen/blob/main/LICENSE)
