@@ -787,6 +787,9 @@ role on the registry.
   suffixes are not.
 - One exchange per registry host per process: the result, success or failure,
   is cached for the rest of the run.
+- The credential chain is the Azure SDK's: locally it includes `az login` and
+  Azure PowerShell sessions. `AZURE_TOKEN_CREDENTIALS=prod` restricts it to the
+  environment, Workload Identity and managed identity.
 - An identity that cannot produce a token is not an error. krmgen prints a
   `warning: Azure identity login to <host> skipped, …` line to stderr and
   continues with no credentials — helm's registry config or an anonymous pull,
