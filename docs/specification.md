@@ -214,7 +214,7 @@ helm:
 | `helm.charts[].releaseName` | string | no | Helm release name |
 | `helm.charts[].namespace` | string | no | Target namespace |
 | `helm.charts[].repoUser` | string | no | Falls back to `KRMGEN_HELM_USERNAME` |
-| `helm.charts[].repoPassword` | string | no | Falls back to `KRMGEN_HELM_PASSWORD` |
+| `helm.charts[].repoPassword` | string | no | Falls back to `KRMGEN_HELM_PASSWORD`; for an Azure Container Registry chart with no username or password from either source, falls back to the ambient Azure identity (see External tool support matrix, Credentials) |
 | `helm.charts[].ignoreCredentials` | bool | no | When true, no credentials are passed even if available |
 | `helm.charts[].valuesFile` | string | no | Path relative to the source directory |
 | `helm.charts[].valuesInline` | object | no | Written to a temporary values file |
@@ -765,6 +765,40 @@ verified in the captured argv above (`registry login registry.example.com
 --username bob --password secret` precedes the `template` invocation). The
 HTTP repo backend never calls login (`repoHelmGenerator.login` is a no-op);
 its credentials are carried only on the `template` command itself.
+
+**Azure Container Registry.** When a chart's `repo` is `oci://<name>.azurecr.io/…`
+and neither `repoUser`/`repoPassword` nor `KRMGEN_HELM_USERNAME`/
+`KRMGEN_HELM_PASSWORD` supplies a username or password, `credentials`
+(`internal/helm/generator.go`) asks the ambient Azure identity for one
+(`acrWorkloadCredentials`, `internal/helm/acr.go`):
+`azidentity.DefaultAzureCredential` — Workload Identity, managed identity, the
+`AZURE_*` service principal variables or the Azure CLI — issues a Microsoft
+Entra token for scope `https://containerregistry.azure.net/.default`, which is
+exchanged at `POST https://<registry>/oauth2/exchange` for an ACR refresh
+token. The resulting pair, username `00000000-0000-0000-0000-000000000000` and
+the refresh token as password, then flows through both backends exactly like
+configured credentials: `registry login` plus flags on the external binary,
+`ClientOptBasicAuth` on the embedded library. The identity needs the `AcrPull`
+role on the registry.
+
+- Explicit credentials always win, including a partial pair (username only).
+  `ignoreCredentials: true` suppresses the Azure lookup as well.
+- Only public-cloud registries (`*.azurecr.io`) are recognised; sovereign-cloud
+  suffixes are not.
+- One exchange per registry host per process: the result, success or failure,
+  is cached for the rest of the run.
+- The credential chain is the Azure SDK's: locally it includes `az login` and
+  Azure PowerShell sessions. `AZURE_TOKEN_CREDENTIALS=prod` restricts it to the
+  environment, Workload Identity and managed identity.
+- An identity that cannot produce a token is not an error. krmgen prints a
+  `warning: Azure identity login to <host> skipped, …` line to stderr and
+  continues with no credentials — helm's registry config or an anonymous pull,
+  the behaviour before this existed.
+- Because the pair is now available, it takes precedence over whatever an
+  earlier `helm registry login` left in helm's registry config for that host
+  (for example an admin-user password).
+- On the external binary the refresh token is visible in the process table
+  while `helm` runs, like any configured password (see Credentials above).
 
 ### Supported versions
 

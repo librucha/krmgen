@@ -27,6 +27,7 @@ internal/
     repo-generator.go   → HTTP repo helm generator
     oci-generator.go    → OCI registry helm generator
     processor.go        → TemplateHelmCharts orchestrates charts; shared values/credentials helpers
+    acr.go              → Azure Container Registry login via the ambient Azure identity (Entra token → ACR refresh token)
     renderer.go          → Renderer interface, selectRenderer (embedded vs binary, keyed on KRMGEN_HELM_EXECUTABLE)
     renderer_sdk.go       → embedded backend, helm.sh/helm/v4/pkg/action (default)
     renderer_binary.go    → external backend, shells out to the helm binary

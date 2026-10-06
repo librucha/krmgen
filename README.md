@@ -67,7 +67,7 @@ The key insight is step 1: **all files are Go-template-evaluated before Helm or 
 - **ArgoCD & Kubernetes env vars** — read `ARGOCD_ENV_*` / `ARGOCD_APP_*` / `KUBE_*` variables
 - **Local file inclusion** — embed file contents into templates with `readF`
 - **Skip patterns** — exclude binary or generated files from template evaluation via glob patterns (`*.pfx`, `assets/*.png`)
-- **OCI registry support** — Helm charts from OCI registries (`oci://`)
+- **OCI registry support** — Helm charts from OCI registries (`oci://`), with passwordless Azure Container Registry login through Workload Identity
 - **Secret-safe diagnostics** — a failing run never echoes rendered resources or a URL password to stderr (see [Secret handling](#secret-handling))
 - **Docker image** — `librucha/krmgen` available for CI pipelines
 
@@ -187,7 +187,7 @@ helm:
       namespace: <namespace>       # optional — target namespace
       ignoreCredentials: false     # optional — skip auth for public OCI repos
       repoUser: <username>         # optional — repo username
-      repoPassword: <password>     # optional — repo password (use env var or template)
+      repoPassword: <password>     # optional — repo password (use env var or template); omit both for ACR to log in with the Azure identity
       valuesFile: values.yaml      # optional — path to values file (relative to config)
       valuesInline:                # optional — inline Helm values
         key: value
@@ -461,6 +461,32 @@ helm:
       version: 1.0.0
 ```
 
+### Azure Container Registry with Workload Identity
+
+Leave the credentials out. For an `oci://<name>.azurecr.io/...` chart with no
+`repoUser`/`repoPassword` and no `KRMGEN_HELM_USERNAME`/`KRMGEN_HELM_PASSWORD`,
+krmgen logs in with the ambient Azure identity — Workload Identity in AKS (e.g.
+the Argo CD repo-server), managed identity, `AZURE_*` variables or `az login`
+locally — exactly like `az acr login`. The identity needs `AcrPull` on the
+registry.
+
+```yaml
+helm:
+  charts:
+    - name: my-app
+      repo: oci://myregistry.azurecr.io/helm/my-app
+      releaseName: my-app
+      version: 2.0.0
+```
+
+Explicit credentials still win, so remove any admin-user `repoPassword` or
+`KRMGEN_HELM_*` variables to switch over. If no identity is available, krmgen
+warns on stderr and falls back to helm's registry config.
+
+Locally, `DefaultAzureCredential` also picks up an `az login` or Azure
+PowerShell (`Connect-AzAccount`) session. Set `AZURE_TOKEN_CREDENTIALS=prod`
+to test with only what a cluster would have.
+
 ---
 
 ## Docker
@@ -495,13 +521,14 @@ docker run --rm -v "$(pwd):/workspace" librucha/krmgen:latest krmgen generate /w
 | `KRMGEN_HELM_PASSWORD` | Helm repo password (fallback if not set in `krmgen.yaml`) |
 | `KRMGEN_KUBECTL_EXECUTABLE` | Opt into the external `kubectl kustomize` backend: that path is used as kubectl. Unset (the default) renders through the Kustomize library compiled into krmgen instead (see specification) |
 
-For Azure authentication, krmgen uses the standard Azure SDK environment variables:
+For Azure authentication — the `az*` template functions and the Azure Container Registry login — krmgen uses the standard Azure SDK environment variables:
 
 | Variable | Description |
 |---|---|
 | `AZURE_TENANT_ID` | Azure tenant ID |
 | `AZURE_CLIENT_ID` | Service principal / managed identity client ID |
 | `AZURE_CLIENT_SECRET` | Service principal client secret |
+| `AZURE_TOKEN_CREDENTIALS` | Restrict `DefaultAzureCredential`, e.g. `prod` (env, Workload Identity, managed identity only) to keep a developer's `az`/PowerShell login out of the chain |
 
 See [Azure SDK authentication](https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication) for all supported authentication methods.
 

@@ -89,6 +89,13 @@ docker run --rm -v "$PWD:/workspace" -w /workspace \
 Used as a fallback when `repoUser` / `repoPassword` are not set in
 `krmgen.yaml`.
 
+### Azure Container Registry
+
+An `oci://<name>.azurecr.io/...` chart with no credentials configured logs in
+with the Azure identity (Workload Identity on AKS, managed identity, `AZURE_*`
+variables), like `az acr login`. The identity needs `AcrPull`; no admin user
+or password is involved.
+
 ### Argo CD Config Management Plugin (sidecar)
 
 ```yaml
@@ -161,7 +168,8 @@ the full configuration reference are documented in the
 | `KRMGEN_HELM_USERNAME` / `KRMGEN_HELM_PASSWORD` | Helm repo credentials fallback |
 | `KRMGEN_HELM_EXECUTABLE` | Use an external `helm` binary instead of the embedded library |
 | `KRMGEN_KUBECTL_EXECUTABLE` | Use external `kubectl kustomize` instead of the embedded library |
-| `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, … | Azure SDK authentication |
+| `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, … | Azure SDK authentication (template functions and ACR login) |
+| `AZURE_TOKEN_CREDENTIALS` | Restrict the Azure credential chain, e.g. `prod` |
 
 ## License
 

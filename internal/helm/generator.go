@@ -52,9 +52,11 @@ func credentialsProvided(config *types.HelmChart) bool {
 
 // credentials resolves the effective username and password for a chart: the
 // config value, falling back to KRMGEN_HELM_USERNAME/KRMGEN_HELM_PASSWORD,
-// or both empty when IgnoreCredentials is set. This is the single place
-// that reads credentials - every renderer formats these values its own way
-// instead of duplicating the lookup.
+// then - for an Azure Container Registry chart with neither set - a token
+// obtained through the ambient Azure identity (see acr.go). Both are empty
+// when IgnoreCredentials is set. This is the single place that reads
+// credentials - every renderer formats these values its own way instead of
+// duplicating the lookup.
 func credentials(config *types.HelmChart) (username, password string) {
 	if config.IgnoreCredentials {
 		return "", ""
@@ -66,6 +68,9 @@ func credentials(config *types.HelmChart) (username, password string) {
 	password = config.Password
 	if password == "" {
 		password = os.Getenv(cons.EnvHelmPassword)
+	}
+	if username == "" && password == "" {
+		return acrWorkloadCredentials(config.RepoUrl)
 	}
 	return username, password
 }
