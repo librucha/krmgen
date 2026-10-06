@@ -461,6 +461,28 @@ helm:
       version: 1.0.0
 ```
 
+### Azure Container Registry with Workload Identity
+
+Leave the credentials out. For an `oci://<name>.azurecr.io/...` chart with no
+`repoUser`/`repoPassword` and no `KRMGEN_HELM_USERNAME`/`KRMGEN_HELM_PASSWORD`,
+krmgen logs in with the ambient Azure identity — Workload Identity in AKS (e.g.
+the Argo CD repo-server), managed identity, `AZURE_*` variables or `az login`
+locally — exactly like `az acr login`. The identity needs `AcrPull` on the
+registry.
+
+```yaml
+helm:
+  charts:
+    - name: my-app
+      repo: oci://myregistry.azurecr.io/helm/my-app
+      releaseName: my-app
+      version: 2.0.0
+```
+
+Explicit credentials still win, so remove any admin-user `repoPassword` or
+`KRMGEN_HELM_*` variables to switch over. If no identity is available, krmgen
+warns on stderr and falls back to helm's registry config.
+
 ---
 
 ## Docker
