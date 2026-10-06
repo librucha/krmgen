@@ -82,7 +82,15 @@ The key insight is step 1: **all files are Go-template-evaluated before Helm or 
 
 ## Installation
 
-### Binary (recommended)
+### Homebrew (macOS, Linux)
+
+```bash
+brew install librucha/tap/krmgen
+```
+
+The macOS binaries are signed with a Developer ID and notarized by Apple.
+
+### Binary
 
 Download the latest binary for your platform from [GitHub Releases](https://github.com/librucha/krmgen/releases/latest).
 
