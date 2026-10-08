@@ -261,7 +261,12 @@ selects:
 4. Copy the source directory to a temporary working directory. Every file is
    evaluated as a Go template **except** files matching a skip pattern, which are
    copied byte-for-byte. Each evaluated file gets `{"Values": <resolved values>}`
-   as its template data.
+   as its template data. In a top-level `kind: KrmGen` file the `values` block
+   is blanked first (`config.StripValues`): every line from the `values` key up
+   to the next top-level key, the next document or EOF becomes an empty line,
+   so line numbers in template errors stay right. Values are therefore
+   evaluated exactly once, in step 3 — a resolved value holding a quote cannot
+   break the file's YAML on a second rendering.
 5. For each `kind: KrmGen` file at the top level of the working directory
    (non-recursively, processed in directory-listing order), run the following
    **as one pass, per config file** — not as two global phases:
@@ -302,16 +307,23 @@ values:
   used as a key); it is rejected with
   `values in <file>: <path> has a non-string key - quote templated values`. A
   file that genuinely fails to parse as YAML is skipped silently and its values
-  surface as a missing-key error at first use.
+  surface as a missing-key error at first use. If such a top-level file still
+  has a `kind: KrmGen` line but is not valid YAML after templating, the run
+  fails with `config file <name> is not valid YAML after templating: <err>`
+  instead of skipping it and printing nothing.
 - Every string leaf is a Go template, evaluated in document order with the
   values resolved before it in scope — including earlier siblings in the same
   nested map. Forward references fail.
 - A templated leaf always yields a string (`'{{ 3 }}'` is `"3"`); non-string
   scalars (`replicas: 2`) stay typed. Maps and lists are walked recursively.
-- Values of all top-level KrmGen files are merged, files in name order. The
-  same top-level key twice — in two files or twice in one file — is an error
-  (`value "<key>" defined in both <file> and <file>`). Duplicate keys in nested
-  maps are not detected; the last one wins.
+- Values of all top-level KrmGen files are merged, files in name order. A
+  symlinked KrmGen file is followed. The same top-level key in two files is an
+  error (`value "<key>" defined in both <file> and <file>`). A key repeated
+  inside one mapping — top level or nested — is an error too
+  (`value <path> defined twice in <file>`, e.g. `values.db.host`).
+- A YAML merge key (`<<`) inside `values` is an error
+  (`values in <file>: <path> uses a YAML merge key, which is not supported`);
+  anchors and aliases are resolved.
 - `values` that is not a map is an error, and so is a bare `values:` (YAML
   null: `values in <file> must be a mapping`). Omit the key or write
   `values: {}`.

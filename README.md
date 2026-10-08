@@ -415,8 +415,9 @@ stringData:
 ```
 
 Values are evaluated top to bottom, each seeing the ones above it. Quote
-templated values: `krmgen.yaml` is read as YAML before templating. A missing
-key is an error; for an optional one use `{{ dig "key" "fallback" .Values }}`.
+templated values: `krmgen.yaml` is read as YAML before templating.
+
+> All templates run with `missingkey=error`: a missing key (`{{ .Values.nope }}`, a stray `{{ .Foo }}`) fails the run instead of rendering `<no value>`; for an optional value use `{{ dig "key" "fallback" .Values }}`.
 
 ### Azure secrets in Kubernetes Secret
 
