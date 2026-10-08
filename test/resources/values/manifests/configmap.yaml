@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app
+data:
+  keyvault: '{{ .Values.keyvault }}'
+  replicas: '{{ .Values.replicas }}'
+  dbUrl: '{{ .Values.db.url }}'
+  zones: '{{ range .Values.zones }}[{{ . }}@{{ $.Values.clusterProfile }}]{{ end }}'

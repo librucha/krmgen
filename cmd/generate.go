@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func NewGenerateCommand() *cobra.Command {
@@ -63,7 +64,12 @@ var removeAll = os.RemoveAll
 // either. Instead it is reported as a stderr warning naming the path left
 // behind, since it may still hold rendered secrets.
 func generate(srcDir string, skipPatterns []string) (err error) {
-	workDir, err := copySrcDir(srcDir, skipPatterns)
+	values, err := config.ResolveValues(srcDir)
+	if err != nil {
+		return err
+	}
+	data := map[string]any{config.ValuesKey: values}
+	workDir, err := copySrcDir(srcDir, skipPatterns, data)
 	if workDir != "" {
 		defer func() {
 			if rmErr := removeAll(workDir); rmErr != nil {
@@ -106,20 +112,20 @@ func matchesSkipPattern(relPath string, patterns []string) bool {
 	return false
 }
 
-func copySrcDir(srcDir string, skipPatterns []string) (string, error) {
+func copySrcDir(srcDir string, skipPatterns []string, data map[string]any) (string, error) {
 	workDir, err := os.MkdirTemp(os.TempDir(), "krmgen")
 	if err != nil {
 		return "", fmt.Errorf("creating working dir in %s failed error: %w", os.TempDir(), err)
 	}
 
-	if err := copyDir(srcDir, workDir, srcDir, skipPatterns); err != nil {
+	if err := copyDir(srcDir, workDir, srcDir, skipPatterns, data); err != nil {
 		return workDir, err
 	}
 
 	return workDir, nil
 }
 
-func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string) error {
+func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string, data map[string]any) error {
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
 		return fmt.Errorf("reading source directory %s failed error: %w", srcDir, err)
@@ -132,7 +138,7 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 			if err := os.MkdirAll(dstPath, cons.DirPerm); err != nil {
 				return fmt.Errorf("creating directory %s failed error: %w", dstPath, err)
 			}
-			if err := copyDir(srcPath, dstPath, baseDir, skipPatterns); err != nil {
+			if err := copyDir(srcPath, dstPath, baseDir, skipPatterns, data); err != nil {
 				return err
 			}
 			continue
@@ -149,9 +155,9 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 			}
 		} else {
 			// evaluate templates
-			evaluated, err := template.EvalGoTemplates(string(fileContent), nil)
+			evaluated, err := template.EvalGoTemplates(string(fileContent), data)
 			if err != nil {
-				return fmt.Errorf("template evaluation of file %s failed error: %w", srcPath, err)
+				return fmt.Errorf("template evaluation of file %s failed error: %w%s", srcPath, err, missingValueHint(err))
 			}
 			if err := os.WriteFile(dstPath, []byte(evaluated), cons.FilePerm); err != nil {
 				return fmt.Errorf("writing evaluated file %s failed error: %w", srcPath, err)
@@ -159,6 +165,17 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 		}
 	}
 	return nil
+}
+
+// missingValueHint explains the usual cause of a missing .Values key: a
+// templated value left unquoted makes krmgen.yaml invalid YAML before
+// templating, so ResolveValues skips the file and its values never exist.
+func missingValueHint(err error) string {
+	msg := err.Error()
+	if strings.Contains(msg, "map has no entry for key") && strings.Contains(msg, ".Values") {
+		return " (values are read from krmgen.yaml before templating - quote templated values)"
+	}
+	return ""
 }
 
 func processWorkDir(workDir string) error {

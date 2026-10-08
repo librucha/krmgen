@@ -6,6 +6,9 @@ type Config struct {
 	Metadata   *Metadata `yaml:"metadata"`
 	Helm       *Helm     `yaml:"helm"`
 	Skip       []string  `yaml:"skip"`
+	// Values is informational: the values templates see are resolved by
+	// config.ResolveValues from the raw file, before templating.
+	Values map[string]any `yaml:"values"`
 }
 
 func (config Config) HasHelm() bool {

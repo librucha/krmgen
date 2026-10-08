@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/librucha/krmgen/internal/config"
 )
 
 // TestCopiedFilesAreNotWorldReadable covers every way krmgen puts something
@@ -29,7 +31,7 @@ func TestCopiedFilesAreNotWorldReadable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	workDir, err := copySrcDir(src, []string{"*.pfx"})
+	workDir, err := copySrcDir(src, []string{"*.pfx"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +230,7 @@ func TestCopySrcDir_EvaluatesTemplatesExceptSkipped(t *testing.T) {
 	write("plain.yaml", `value: '{{ kubeEnv "TESTVAR" "fallback" }}'`)
 	write("certs/keep.pfx", `raw: {{ this is not a template }}`)
 
-	workDir, err := copySrcDir(src, []string{"*.pfx"})
+	workDir, err := copySrcDir(src, []string{"*.pfx"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +254,7 @@ func TestCopySrcDir_EvaluatesTemplatesExceptSkipped(t *testing.T) {
 }
 
 func TestCopySrcDir_WorkDirIsPrivate(t *testing.T) {
-	workDir, err := copySrcDir(t.TempDir(), nil)
+	workDir, err := copySrcDir(t.TempDir(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +276,7 @@ func TestCopyDir_BrokenTemplateReturnsError(t *testing.T) {
 	}
 	dst := t.TempDir()
 
-	err := copyDir(src, dst, src, nil)
+	err := copyDir(src, dst, src, nil, nil)
 	if err == nil {
 		t.Fatal("expected a broken template to return an error")
 	}
@@ -357,5 +359,89 @@ func TestProcessWorkDir_PrintsOnlyKrmGenFiles(t *testing.T) {
 	// so exactly one empty line is printed for it.
 	if got := buf.String(); got != "\n" {
 		t.Errorf("stdout = %q, want a single empty line", got)
+	}
+}
+
+func TestGenerate_ValuesReachEveryTemplatedFile(t *testing.T) {
+	t.Setenv("ARGOCD_ENV_CLUSTER_PROFILE", "prod")
+	src, err := filepath.Abs("../test/resources/values")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	genErr := generate(src, mergeSkipPatterns(config.ReadSkipPatterns(src), nil))
+	_ = w.Close()
+	os.Stdout = stdout
+	if genErr != nil {
+		t.Fatal(genErr)
+	}
+
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"namespace: prod",
+		"keyvault: rixocz-prod-aks-vault",
+		`replicas: "2"`,
+		"dbUrl: postgres://db.prod.internal:5432",
+		"[a@prod][b@prod]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output does not contain %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestCopySrcDir_SkippedFileGetsNoValues(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "raw.txt"), []byte("{{ .Values.keyvault }}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	workDir, err := copySrcDir(src, []string{"*.txt"}, map[string]any{"Values": map[string]any{"keyvault": "kv"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
+	got, err := os.ReadFile(filepath.Join(workDir, "raw.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "{{ .Values.keyvault }}" {
+		t.Errorf("skipped file was evaluated: %q", got)
+	}
+}
+
+func TestCopyDir_MissingValueErrorHasQuotingHint(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "secret.yaml"), []byte("x: {{ .Values.keyvault }}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err := copyDir(src, t.TempDir(), src, nil, map[string]any{"Values": map[string]any{}})
+	if err == nil {
+		t.Fatal("expected a missing value to fail")
+	}
+	for _, want := range []string{"template evaluation of file", `map has no entry for key "keyvault"`, "quote templated values"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err, want)
+		}
+	}
+}
+
+func TestGenerate_ValueErrorFailsTheRun(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "krmgen.yaml"), []byte("kind: KrmGen\nvalues:\n  a: '{{ .Values.b }}'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err := generate(src, nil)
+	if err == nil || !strings.Contains(err.Error(), "evaluating value values.a in krmgen.yaml failed") {
+		t.Errorf("err = %v, want the value error", err)
 	}
 }
