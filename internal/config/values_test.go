@@ -185,3 +185,101 @@ func TestResolveValues_ErrorDoesNotLeakResolvedValues(t *testing.T) {
 		t.Errorf("error leaks a resolved value: %q", err)
 	}
 }
+
+func TestResolveValues_FollowsSymlinkedConfig(t *testing.T) {
+	target := writeFiles(t, map[string]string{"real.yaml": "kind: KrmGen\nvalues:\n  keyvault: kv\n"})
+	dir := t.TempDir()
+	if err := os.Symlink(filepath.Join(target, "real.yaml"), filepath.Join(dir, "krmgen.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ResolveValues(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]any{"keyvault": "kv"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("values = %v, want %v", got, want)
+	}
+}
+
+func TestResolveValues_DuplicateAndMergeKeys(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{
+			name:    "nested duplicate",
+			content: "kind: KrmGen\nvalues:\n  db:\n    host: a\n    host: b\n",
+			wantErr: "value values.db.host defined twice in krmgen.yaml",
+		},
+		{
+			name:    "top-level duplicate in one file",
+			content: "kind: KrmGen\nvalues:\n  keyvault: one\n  keyvault: two\n",
+			wantErr: "value values.keyvault defined twice in krmgen.yaml",
+		},
+		{
+			name:    "merge key",
+			content: "kind: KrmGen\nvalues:\n  base: &base\n    host: a\n  db:\n    <<: *base\n    port: 1\n",
+			wantErr: "values in krmgen.yaml: values.db uses a YAML merge key, which is not supported",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ResolveValues(writeFiles(t, map[string]string{"krmgen.yaml": tt.content}))
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("err = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestStripValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "values in the middle",
+			content: "kind: KrmGen\nvalues:\n  a: '{{ x }}'\n  b:\n    c: d\n# trailing comment\nskip:\n  - '*.pfx'\n",
+			want:    "kind: KrmGen\n\n\n\n\n\nskip:\n  - '*.pfx'\n",
+		},
+		{
+			name:    "values last",
+			content: "kind: KrmGen\nskip: []\nvalues:\n  a: b\n  c: d\n",
+			want:    "kind: KrmGen\nskip: []\n\n\n\n",
+		},
+		{
+			name:    "flow-style values",
+			content: "kind: KrmGen\nvalues: {a: b}\nhelm: {}\n",
+			want:    "kind: KrmGen\n\nhelm: {}\n",
+		},
+		{
+			name:    "no values",
+			content: "kind: KrmGen\nskip: []\n",
+			want:    "kind: KrmGen\nskip: []\n",
+		},
+		{
+			name:    "non-KrmGen untouched",
+			content: "kind: ConfigMap\nvalues:\n  a: b\n",
+			want:    "kind: ConfigMap\nvalues:\n  a: b\n",
+		},
+		{
+			name:    "unparseable untouched",
+			content: "kind: KrmGen\nvalues:\n  x: 'unterminated\n",
+			want:    "kind: KrmGen\nvalues:\n  x: 'unterminated\n",
+		},
+		{
+			name:    "values last before next document",
+			content: "kind: KrmGen\nvalues:\n  a: b\n---\nkind: Other\n",
+			want:    "kind: KrmGen\n\n\n---\nkind: Other\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(StripValues([]byte(tt.content))); got != tt.want {
+				t.Errorf("StripValues() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

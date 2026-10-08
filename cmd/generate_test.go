@@ -428,7 +428,7 @@ func TestCopyDir_MissingValueErrorHasQuotingHint(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a missing value to fail")
 	}
-	for _, want := range []string{"template evaluation of file", `map has no entry for key "keyvault"`, "quote templated values"} {
+	for _, want := range []string{"template evaluation of file", `map has no entry for key "keyvault"`, "key not defined in values:"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error = %q, want it to contain %q", err, want)
 		}
@@ -443,5 +443,52 @@ func TestGenerate_ValueErrorFailsTheRun(t *testing.T) {
 	err := generate(src, nil)
 	if err == nil || !strings.Contains(err.Error(), "evaluating value values.a in krmgen.yaml failed") {
 		t.Errorf("err = %v, want the value error", err)
+	}
+}
+
+func TestGenerate_ValuesAreEvaluatedOnce(t *testing.T) {
+	t.Setenv("ARGOCD_ENV_PW", "it's")
+	src := t.TempDir()
+	files := map[string]string{
+		"krmgen.yaml":        "kind: KrmGen\nvalues:\n  pw: '{{ argocdEnv \"PW\" }}'\n",
+		"kustomization.yaml": "resources:\n  - cm.yaml\n",
+		"cm.yaml":            "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cm\ndata:\n  pw: {{ .Values.pw | quote }}\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(src, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	stdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	genErr := generate(src, nil)
+	_ = w.Close()
+	os.Stdout = stdout
+	if genErr != nil {
+		t.Fatal(genErr)
+	}
+
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatal(err)
+	}
+	if out := buf.String(); !strings.Contains(out, "pw: it's") {
+		t.Errorf("output does not contain the value:\n%s", out)
+	}
+}
+
+func TestProcessWorkDir_BrokenKrmGenFileFails(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "krmgen.yaml"), []byte("kind: KrmGen\nfoo: 'it's'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err := processWorkDir(dir)
+	if err == nil || !strings.Contains(err.Error(), "config file krmgen.yaml is not valid YAML after templating: ") {
+		t.Errorf("err = %v, want the invalid YAML error", err)
 	}
 }
