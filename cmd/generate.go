@@ -149,7 +149,7 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 			}
 		} else {
 			// evaluate templates
-			evaluated, err := template.EvalGoTemplates(string(fileContent))
+			evaluated, err := template.EvalGoTemplates(string(fileContent), nil)
 			if err != nil {
 				return fmt.Errorf("template evaluation of file %s failed error: %w", srcPath, err)
 			}
