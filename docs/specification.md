@@ -208,6 +208,7 @@ helm:
 | `metadata.labels` | map[string]string | no | Currently parsed but not applied to output |
 | `metadata.annotations` | map[string]string | no | Currently parsed but not applied to output |
 | `skip` | []string | no | Glob patterns; see Rendering pipeline |
+| `values` | map | no | Named values exposed to every templated file as `.Values`; see Rendering pipeline, Values |
 | `helm.charts[].name` | string | no (backend-dependent, see below) | Chart name |
 | `helm.charts[].repo` | string | no | Repository URL; `oci://` selects the OCI backend, `http(s)://` the repo backend |
 | `helm.charts[].version` | string | no | Chart version; omitted means latest |
@@ -254,10 +255,22 @@ selects:
    any template evaluation — the patterns themselves cannot be templated.
 2. Merge config-level `skip` patterns with `--skip` flags. Order is preserved,
    duplicates removed, config patterns first.
-3. Copy the source directory to a temporary working directory. Every file is
+3. Resolve `values` from every `kind: KrmGen` file at the top level of the
+   source directory (`config.ResolveValues`, `internal/config/values.go`), on
+   the **raw YAML**, before any file is copied. See Values below.
+4. Copy the source directory to a temporary working directory. Every file is
    evaluated as a Go template **except** files matching a skip pattern, which are
-   copied byte-for-byte.
-4. For each `kind: KrmGen` file at the top level of the working directory
+   copied byte-for-byte. Each evaluated file gets `{"Values": <resolved values>}`
+   as its template data. In a top-level `kind: KrmGen` file the `values` block
+   is blanked first (`config.StripValues`): every line from the `values` key up
+   to the next top-level key, the next document or EOF becomes an empty line,
+   so line numbers in template errors stay right. Values are therefore
+   evaluated exactly once, in step 3 — a resolved value holding a quote cannot
+   break the file's YAML on a second rendering. A flow-style file
+   (`{kind: KrmGen, values: {...}}`) is not blanked — its keys share lines,
+   so blanking would wipe `kind` too; its values block is rendered a second
+   time, and a file that no longer parses fails the run (step 5).
+5. For each `kind: KrmGen` file at the top level of the working directory
    (non-recursively, processed in directory-listing order), run the following
    **as one pass, per config file** — not as two global phases:
    1. Run helm for every chart declared in that config file, concatenating
@@ -270,7 +283,7 @@ selects:
       the same on-disk kustomization file every time — see the Known
       deviation below.
    3. Print that pass's result to stdout.
-5. (There is no separate global "run kustomize once" phase — step 4.2 above
+6. (There is no separate global "run kustomize once" phase — step 5.2 above
    is it, and it happens once per config file.)
 
 ### Skip pattern matching
@@ -278,6 +291,52 @@ selects:
 Patterns use `filepath.Match` syntax. Each pattern is tested against **both** the
 full relative path and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx`
 without needing a directory prefix.
+
+### Values
+
+`values:` declares named values, exposed to every templated file — including
+`krmgen.yaml` itself, files in subdirectories and `kustomization.yaml` — as
+`.Values.<key>` (`$.Values.<key>` inside `range` / `with`).
+
+```yaml
+kind: KrmGen
+values:
+  clusterProfile: '{{ argocdEnv "CLUSTER_PROFILE" }}'
+  keyvault: '{{ printf "rixocz-%s-aks-vault" .Values.clusterProfile }}'
+```
+
+- Read from the raw YAML before templating: a templated value **must be
+  quoted**. An unquoted `{{ ... }}` is usually still valid YAML (a flow mapping
+  used as a key); it is rejected with
+  `values in <file>: <path> has a non-string key - quote templated values`. A
+  file that genuinely fails to parse as YAML is skipped silently and its values
+  surface as a missing-key error at first use. If such a top-level file still
+  declares `kind: KrmGen` (block or flow style) but is not valid YAML after
+  templating, the run fails with `config file <name> is not valid YAML after templating: <err>`
+  instead of skipping it and printing nothing.
+- Every string leaf is a Go template, evaluated in document order with the
+  values resolved before it in scope — including earlier siblings in the same
+  nested map. Forward references fail.
+- A templated leaf always yields a string (`'{{ 3 }}'` is `"3"`); non-string
+  scalars (`replicas: 2`) stay typed. Maps and lists are walked recursively.
+- Values of all top-level KrmGen files are merged, files in name order. A
+  symlinked KrmGen file is followed. The same top-level key in two files is an
+  error (`value "<key>" defined in both <file> and <file>`). A key repeated
+  inside one mapping — top level or nested — is an error too
+  (`value <path> defined twice in <file>`, e.g. `values.db.host`).
+- A YAML merge key (`<<`) inside `values` is an error
+  (`values in <file>: <path> uses a YAML merge key, which is not supported`);
+  anchors and aliases are resolved.
+- `values` that is not a map is an error, and so is a bare `values:` (YAML
+  null: `values in <file> must be a mapping`). Omit the key or write
+  `values: {}`.
+- A reference to a key that does not exist is an error
+  (`missingkey=error`), never `<no value>`. This applies to every template:
+  a stray `{{ .Foo }}` that used to render `<no value>` now fails the run.
+  Consequently `{{ .Values.x | default "a" }}` fails when `x` is absent; write
+  an optional value as `{{ dig "x" "a" .Values }}` (sprig `dig`).
+- A value error names the key path and file, never the evaluated result.
+- Files matching a skip pattern are not evaluated and see no values.
 
 ### Kustomization discovery
 
@@ -551,6 +610,9 @@ krmgen's golden suite either, same as the four above.
 All [sprig](https://masterminds.github.io/sprig/) functions are available, except
 `env` and `expandenv`, which are removed so that templates cannot read arbitrary
 process environment. Use `argocdEnv` or `kubeEnv` instead.
+
+Templates run with `missingkey=error`: a reference to a missing map key fails
+the run instead of rendering `<no value>`. This applies to all templates.
 
 ### Caching
 

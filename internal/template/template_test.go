@@ -104,7 +104,7 @@ func Test_EvalGoTemplates(t *testing.T) {
 			if tt.requireAzure && os.Getenv("AZURE_TENANT_ID") == "" {
 				t.Skip("skipping: requires Azure credentials (AZURE_TENANT_ID not set)")
 			}
-			got, err := EvalGoTemplates(tt.args.text)
+			got, err := EvalGoTemplates(tt.args.text, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EvalGoTemplates() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -138,7 +138,7 @@ func TestEvalGoTemplates_RegistersEveryDocumentedFunction(t *testing.T) {
 			// parses if and only if the function is registered. "if false"
 			// means the reference never runs, so a registered function
 			// yields no error at all - any error means the probe failed.
-			if _, err := EvalGoTemplates("{{ if false }}{{ " + name + " }}{{ end }}"); err != nil {
+			if _, err := EvalGoTemplates("{{ if false }}{{ "+name+" }}{{ end }}", nil); err != nil {
 				t.Errorf("template function %q is not registered: %v", name, err)
 			}
 		})
@@ -177,9 +177,31 @@ func TestEvalGoTemplates_DoesNotRegisterEnvFunctions(t *testing.T) {
 	// sprig's env and expandenv are removed deliberately: templates must not
 	// read arbitrary process environment.
 	for _, name := range []string{"env", "expandenv"} {
-		_, err := EvalGoTemplates("{{ if false }}{{ " + name + " \"X\" }}{{ end }}")
+		_, err := EvalGoTemplates("{{ if false }}{{ "+name+" \"X\" }}{{ end }}", nil)
 		if err == nil || !strings.Contains(err.Error(), "not defined") {
 			t.Errorf("%q must not be registered, got err = %v", name, err)
 		}
+	}
+}
+
+func TestEvalGoTemplates_PassesData(t *testing.T) {
+	data := map[string]any{"Values": map[string]any{"keyvault": "kv-prod", "zones": []any{"a", "b"}}}
+	got, err := EvalGoTemplates(`{{ .Values.keyvault }}|{{ range .Values.zones }}{{ . }}-{{ $.Values.keyvault }};{{ end }}`, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "kv-prod|a-kv-prod;b-kv-prod;"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestEvalGoTemplates_MissingKeyIsAnError(t *testing.T) {
+	data := map[string]any{"Values": map[string]any{"keyvault": "kv-prod"}}
+	_, err := EvalGoTemplates(`{{ .Values.keyvalut }}`, data)
+	if err == nil {
+		t.Fatal("expected a missing key to fail, it rendered instead")
+	}
+	if !strings.Contains(err.Error(), `map has no entry for key "keyvalut"`) {
+		t.Errorf("error = %q, want it to name the missing key", err)
 	}
 }

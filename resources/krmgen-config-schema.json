@@ -31,6 +31,10 @@
       "description": "Glob patterns of files copied without Go template evaluation",
       "items": { "type": "string" }
     },
+    "values": {
+      "type": "object",
+      "description": "Named values exposed to every templated file as .Values. String leaves are Go templates evaluated in document order; quote them."
+    },
     "helm": {
       "type": "object",
       "properties": {

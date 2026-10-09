@@ -178,6 +178,9 @@ skip:                              # optional — glob patterns of files to copy
   - "*.png"
   - "certs/*.pem"                  #   directory-scoped: only .pem files inside certs/
 
+values:                            # optional — exposed as .Values in every templated file; quote templated values
+  clusterProfile: '{{ argocdEnv "CLUSTER_PROFILE" }}'
+
 helm:
   charts:
     - name: <chart-name>           # required for HTTP(S) repos (helm resolves the chart by this name); NOT used by oci:// repos — see specification
@@ -390,6 +393,33 @@ helm:
           tag: '{{ argocdEnv "IMAGE_TAG" "latest" }}'
         replicaCount: '{{ argocdEnv "REPLICAS" "2" }}'
 ```
+
+### Shared values
+
+```yaml
+# krmgen.yaml
+kind: KrmGen
+values:
+  clusterProfile: '{{ argocdEnv "CLUSTER_PROFILE" }}'
+  keyvault: '{{ printf "rixocz-%s-aks-vault" .Values.clusterProfile }}'
+```
+
+```yaml
+# secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db
+stringData:
+  password: '{{ azSec .Values.keyvault "db-secret" }}'
+```
+
+Values are evaluated top to bottom, each seeing the ones above it. Quote
+templated values: `krmgen.yaml` is read as YAML before templating. Inside
+`{{ with }}` / `{{ range }}` the dot is rebound — use `$.Values.<key>` there
+(otherwise: `can't evaluate field Values in type string`).
+
+> All templates run with `missingkey=error`: a missing key (`{{ .Values.nope }}`, a stray `{{ .Foo }}`) fails the run instead of rendering `<no value>`; for an optional value use `{{ dig "key" "fallback" .Values }}`.
 
 ### Azure secrets in Kubernetes Secret
 

@@ -13,15 +13,17 @@ krmgen.go          → entry point, wires version into cmd
 cmd/root.go        → cobra root command
 cmd/generate.go    → "generate <path>" command:
                       1. read skip patterns from krmgen.yaml (pre-copy, raw YAML)
-                      2. copy src dir to temp dir (evaluating Go templates in all files
+                      2. resolve values from krmgen.yaml (pre-copy, raw YAML)
+                      3. copy src dir to temp dir (evaluating Go templates with .Values in all files
                          except those matching skip patterns — copied as-is)
-                      3. find KrmGen config files (kind: KrmGen)
-                      4. ProcessConfig → helm + kustomize → stdout
+                      4. find KrmGen config files (kind: KrmGen)
+                      5. ProcessConfig → helm + kustomize → stdout
 
 internal/
   types.go              → Config, Metadata, Helm, HelmChart types
   config/parser.go      → IsConfigFile, ParseConfig (YAML unmarshal)
   config/processor.go   → ProcessConfig: orchestrates helm + kustomize
+  config/values.go      → ResolveValues: values: of KrmGen files → .Values template data
   helm/
     generator.go        → generator interface, OCI vs HTTP repo detection
     repo-generator.go   → HTTP repo helm generator
@@ -96,6 +98,28 @@ krmgen generate . --skip='*.pfx' --skip='assets/*.png'
 
 Patterns use `filepath.Match` syntax. Each pattern is tested against both the full relative path
 and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx` without a directory prefix.
+
+## Values
+
+`values:` in `krmgen.yaml` is exposed as `.Values` to every templated file. Values are read from
+raw YAML, so templated ones must be quoted; they resolve top to bottom. Missing keys are errors
+(`missingkey=error`); optional value: `{{ dig "key" "fallback" .Values }}`; inside
+`with` / `range` use `$.Values`. The `values:` block is blanked in the working copy of a
+block-style top-level `krmgen.yaml` (`config.StripValues`), so it is evaluated once.
+
+```yaml
+# krmgen.yaml
+kind: KrmGen
+values:
+  clusterProfile: '{{ argocdEnv "CLUSTER_PROFILE" }}'
+  keyvault: '{{ printf "rixocz-%s-aks-vault" .Values.clusterProfile }}'
+```
+
+```yaml
+# secret.yaml
+stringData:
+  password: '{{ azSec .Values.keyvault "db-secret" }}'
+```
 
 ## Environment variables
 

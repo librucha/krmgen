@@ -39,6 +39,7 @@ func TestSchemaAcceptsFixtures(t *testing.T) {
 	fixtures := []string{
 		"../../test/resources/full/full-krmgen-config.yaml",
 		"../../test/resources/kustomization-only/krmgen.yaml",
+		"../../test/resources/values/krmgen.yaml",
 	}
 	schema := loadSchema(t)
 	for _, fixture := range fixtures {
@@ -62,6 +63,10 @@ func TestSchemaRejectsInvalidConfigs(t *testing.T) {
 		{
 			name:    "chart entry is not an object",
 			content: "kind: KrmGen\nhelm:\n  charts:\n    - \"not-an-object\"\n",
+		},
+		{
+			name:    "values is not an object",
+			content: "kind: KrmGen\nvalues: [a, b]\n",
 		},
 		{
 			name:    "skip is not a list",

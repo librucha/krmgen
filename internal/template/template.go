@@ -89,11 +89,15 @@ func initFuncs(t *template.Template) error {
 	return nil
 }
 
-func EvalGoTemplates(content string) (string, error) {
+// EvalGoTemplates evaluates content as a Go template with data as its root
+// (".") - in practice {"Values": ...} built by config.ResolveValues.
+// missingkey=error turns a typo such as .Values.keyvalut into an error
+// instead of a silent "<no value>" in the rendered output.
+func EvalGoTemplates(content string, data any) (string, error) {
 	if goutils.IsBlank(content) {
 		return content, nil
 	}
-	t := template.New("krmgen")
+	t := template.New("krmgen").Option("missingkey=error")
 	if err := initFuncs(t); err != nil {
 		return "", err
 	}
@@ -102,7 +106,7 @@ func EvalGoTemplates(content string) (string, error) {
 		return "", err
 	}
 	var buffer strings.Builder
-	if err := tmpl.Execute(&buffer, nil); err != nil {
+	if err := tmpl.Execute(&buffer, data); err != nil {
 		return "", err
 	}
 	return buffer.String(), nil

@@ -7,8 +7,11 @@ import (
 	"github.com/librucha/krmgen/internal/template"
 	cons "github.com/librucha/krmgen/internal/utils"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 func NewGenerateCommand() *cobra.Command {
@@ -63,7 +66,12 @@ var removeAll = os.RemoveAll
 // either. Instead it is reported as a stderr warning naming the path left
 // behind, since it may still hold rendered secrets.
 func generate(srcDir string, skipPatterns []string) (err error) {
-	workDir, err := copySrcDir(srcDir, skipPatterns)
+	values, err := config.ResolveValues(srcDir)
+	if err != nil {
+		return err
+	}
+	data := map[string]any{config.ValuesKey: values}
+	workDir, err := copySrcDir(srcDir, skipPatterns, data)
 	if workDir != "" {
 		defer func() {
 			if rmErr := removeAll(workDir); rmErr != nil {
@@ -106,20 +114,20 @@ func matchesSkipPattern(relPath string, patterns []string) bool {
 	return false
 }
 
-func copySrcDir(srcDir string, skipPatterns []string) (string, error) {
+func copySrcDir(srcDir string, skipPatterns []string, data map[string]any) (string, error) {
 	workDir, err := os.MkdirTemp(os.TempDir(), "krmgen")
 	if err != nil {
 		return "", fmt.Errorf("creating working dir in %s failed error: %w", os.TempDir(), err)
 	}
 
-	if err := copyDir(srcDir, workDir, srcDir, skipPatterns); err != nil {
+	if err := copyDir(srcDir, workDir, srcDir, skipPatterns, data); err != nil {
 		return workDir, err
 	}
 
 	return workDir, nil
 }
 
-func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string) error {
+func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string, data map[string]any) error {
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
 		return fmt.Errorf("reading source directory %s failed error: %w", srcDir, err)
@@ -132,7 +140,7 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 			if err := os.MkdirAll(dstPath, cons.DirPerm); err != nil {
 				return fmt.Errorf("creating directory %s failed error: %w", dstPath, err)
 			}
-			if err := copyDir(srcPath, dstPath, baseDir, skipPatterns); err != nil {
+			if err := copyDir(srcPath, dstPath, baseDir, skipPatterns, data); err != nil {
 				return err
 			}
 			continue
@@ -148,10 +156,14 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 				return fmt.Errorf("writing file %s failed error: %w", srcPath, err)
 			}
 		} else {
+			if !strings.ContainsRune(relPath, filepath.Separator) {
+				// values were already resolved; never render them twice
+				fileContent = config.StripValues(fileContent)
+			}
 			// evaluate templates
-			evaluated, err := template.EvalGoTemplates(string(fileContent))
+			evaluated, err := template.EvalGoTemplates(string(fileContent), data)
 			if err != nil {
-				return fmt.Errorf("template evaluation of file %s failed error: %w", srcPath, err)
+				return fmt.Errorf("template evaluation of file %s failed error: %w%s", srcPath, err, missingValueHint(err))
 			}
 			if err := os.WriteFile(dstPath, []byte(evaluated), cons.FilePerm); err != nil {
 				return fmt.Errorf("writing evaluated file %s failed error: %w", srcPath, err)
@@ -159,6 +171,17 @@ func copyDir(srcDir string, dstDir string, baseDir string, skipPatterns []string
 		}
 	}
 	return nil
+}
+
+// missingValueHint explains a missing .Values key: either a typo in the
+// name, or a templated value left unquoted, which makes the KrmGen file
+// invalid YAML before templating, so ResolveValues skips it.
+func missingValueHint(err error) string {
+	msg := err.Error()
+	if strings.Contains(msg, "map has no entry for key") && strings.Contains(msg, ".Values") {
+		return " (key not defined in values: - values are read from KrmGen files before templating; check the name and quoting)"
+	}
+	return ""
 }
 
 func processWorkDir(workDir string) error {
@@ -169,7 +192,13 @@ func processWorkDir(workDir string) error {
 
 	for _, entry := range entries {
 		filePath := filepath.Join(workDir, entry.Name())
-		if !entry.IsDir() && config.IsConfigFile(filePath) {
+		if entry.IsDir() {
+			continue
+		}
+		if err := checkConfigYAML(filePath); err != nil {
+			return fmt.Errorf("config file %s is not valid YAML after templating: %w", entry.Name(), err)
+		}
+		if config.IsConfigFile(filePath) {
 			configObject, err := config.ParseConfig(filePath)
 			if err != nil {
 				return fmt.Errorf("parsing config file %s failed error: %w", filePath, err)
@@ -182,4 +211,20 @@ func processWorkDir(workDir string) error {
 		}
 	}
 	return nil
+}
+
+// krmGenKindLine matches kind: KrmGen in raw content, either as a block-style
+// top-level line or as an entry of a flow-style mapping ({kind: KrmGen, ...}).
+var krmGenKindLine = regexp.MustCompile(`(?m)(^|[{,]\s*)kind:\s*["']?KrmGen["']?\s*($|[,}])`)
+
+// checkConfigYAML returns the YAML error of a file that declares kind: KrmGen
+// but does not parse. IsConfigFile treats such a file as "not a config" and
+// skipping it would silently empty the output.
+func checkConfigYAML(filePath string) error {
+	content, err := os.ReadFile(filePath)
+	if err != nil || !krmGenKindLine.Match(content) {
+		return nil
+	}
+	var contentObject map[string]any
+	return yaml.Unmarshal(content, &contentObject)
 }
