@@ -89,6 +89,9 @@ brew install librucha/tap/krmgen
 ```
 
 The macOS binaries are signed with a Developer ID and notarized by Apple.
+The cask also installs bash, zsh and fish completions; bash needs the
+`bash-completion@2` formula loaded in your shell profile. Without Homebrew:
+`source <(krmgen completion bash)` (also `zsh`, `fish`, `powershell`).
 
 ### Binary
 
