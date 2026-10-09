@@ -103,7 +103,9 @@ and the bare filename, so `*.pfx` matches `certs/prod/cert.pfx` without a direct
 
 `values:` in `krmgen.yaml` is exposed as `.Values` to every templated file. Values are read from
 raw YAML, so templated ones must be quoted; they resolve top to bottom. Missing keys are errors
-(`missingkey=error`); optional value: `{{ dig "key" "fallback" .Values }}`.
+(`missingkey=error`); optional value: `{{ dig "key" "fallback" .Values }}`; inside
+`with` / `range` use `$.Values`. The `values:` block is blanked in the working copy of a
+block-style top-level `krmgen.yaml` (`config.StripValues`), so it is evaluated once.
 
 ```yaml
 # krmgen.yaml

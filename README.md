@@ -415,7 +415,9 @@ stringData:
 ```
 
 Values are evaluated top to bottom, each seeing the ones above it. Quote
-templated values: `krmgen.yaml` is read as YAML before templating.
+templated values: `krmgen.yaml` is read as YAML before templating. Inside
+`{{ with }}` / `{{ range }}` the dot is rebound — use `$.Values.<key>` there
+(otherwise: `can't evaluate field Values in type string`).
 
 > All templates run with `missingkey=error`: a missing key (`{{ .Values.nope }}`, a stray `{{ .Foo }}`) fails the run instead of rendering `<no value>`; for an optional value use `{{ dig "key" "fallback" .Values }}`.
 
