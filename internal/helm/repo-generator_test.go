@@ -1,7 +1,7 @@
 package helm
 
 import (
-	types "github.com/librucha/krmgen/internal"
+	types "github.com/librucha/krmgen/v2/internal"
 	"testing"
 )
 

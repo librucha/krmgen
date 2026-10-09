@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	appVer "github.com/librucha/krmgen/version"
+	appVer "github.com/librucha/krmgen/v2/version"
 	"github.com/spf13/cobra"
 )
 

@@ -1,9 +1,9 @@
 package config
 
 import (
-	"github.com/librucha/krmgen/internal"
-	"github.com/librucha/krmgen/internal/helm"
-	"github.com/librucha/krmgen/internal/kustomize"
+	"github.com/librucha/krmgen/v2/internal"
+	"github.com/librucha/krmgen/v2/internal/helm"
+	"github.com/librucha/krmgen/v2/internal/kustomize"
 	"strings"
 )
 

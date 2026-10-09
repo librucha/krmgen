@@ -11,8 +11,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	types "github.com/librucha/krmgen/internal"
-	cons "github.com/librucha/krmgen/internal/utils"
+	types "github.com/librucha/krmgen/v2/internal"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 )
 
 type fakeTokenCredential struct {

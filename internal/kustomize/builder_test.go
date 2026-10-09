@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	cons "github.com/librucha/krmgen/internal/utils"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 )
 
 func TestKubectlBuilder_InvokesTheBinaryWithTheDirectory(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	types "github.com/librucha/krmgen/internal"
+	types "github.com/librucha/krmgen/v2/internal"
 )
 
 func TestProcessConfig_NoHelmNoKustomization(t *testing.T) {

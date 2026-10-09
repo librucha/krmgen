@@ -2,7 +2,7 @@
 
 ## Project overview
 
-`krmgen` is a CLI tool for generating Kubernetes Resource Model (KRM) YAML from Helm charts and Kustomize configs. It is written in Go (module `github.com/librucha/krmgen`).
+`krmgen` is a CLI tool for generating Kubernetes Resource Model (KRM) YAML from Helm charts and Kustomize configs. It is written in Go (module `github.com/librucha/krmgen/v2`).
 
 The core idea: take a `krmgen.yaml` config + optional `kustomization.yaml`, render every declared helm chart (through the embedded `helm.sh/helm/v4` library by default, or by the `helm` binary when `KRMGEN_HELM_EXECUTABLE` is set), optionally pipe the result through kustomize (rendered by the embedded library by default, or by `kubectl kustomize` when `KRMGEN_KUBECTL_EXECUTABLE` is set), and print the final YAML to stdout.
 

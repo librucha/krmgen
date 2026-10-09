@@ -6,7 +6,7 @@ import (
 	"testing"
 	"text/template"
 
-	"github.com/librucha/krmgen/internal/template/argocd"
+	"github.com/librucha/krmgen/v2/internal/template/argocd"
 )
 
 func Test_EvalGoTemplates(t *testing.T) {

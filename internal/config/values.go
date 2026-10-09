@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/librucha/krmgen/internal/template"
+	"github.com/librucha/krmgen/v2/internal/template"
 	"gopkg.in/yaml.v3"
 )
 

@@ -10,10 +10,10 @@ import (
 	"github.com/Masterminds/goutils"
 	"github.com/Masterminds/sprig/v3"
 	"github.com/librucha/cloud-go-templates/azure"
-	"github.com/librucha/krmgen/internal/template/argocd"
-	"github.com/librucha/krmgen/internal/template/files"
-	"github.com/librucha/krmgen/internal/template/krmgen"
-	"github.com/librucha/krmgen/internal/template/kube"
+	"github.com/librucha/krmgen/v2/internal/template/argocd"
+	"github.com/librucha/krmgen/v2/internal/template/files"
+	"github.com/librucha/krmgen/v2/internal/template/krmgen"
+	"github.com/librucha/krmgen/v2/internal/template/kube"
 )
 
 // The provider is built once per process, not once per template. Templates are

@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"os"
 
-	"github.com/librucha/krmgen/cmd"
+	"github.com/librucha/krmgen/v2/cmd"
 )
 
 var version string

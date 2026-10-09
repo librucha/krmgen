@@ -3,8 +3,8 @@ package helm
 import (
 	"errors"
 	"fmt"
-	types "github.com/librucha/krmgen/internal"
-	cons "github.com/librucha/krmgen/internal/utils"
+	types "github.com/librucha/krmgen/v2/internal"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 	"os"
 	"os/exec"
 	"path/filepath"

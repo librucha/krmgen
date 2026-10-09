@@ -1,7 +1,7 @@
 package config
 
 import (
-	types "github.com/librucha/krmgen/internal"
+	types "github.com/librucha/krmgen/v2/internal"
 	"gopkg.in/yaml.v3"
 	"log"
 	"os"

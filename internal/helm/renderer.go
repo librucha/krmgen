@@ -3,8 +3,8 @@ package helm
 import (
 	"os"
 
-	types "github.com/librucha/krmgen/internal"
-	cons "github.com/librucha/krmgen/internal/utils"
+	types "github.com/librucha/krmgen/v2/internal"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 )
 
 // Renderer turns one chart declaration into rendered YAML. Two implementations

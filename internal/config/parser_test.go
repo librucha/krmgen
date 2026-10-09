@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/librucha/krmgen/internal"
+	"github.com/librucha/krmgen/v2/internal"
 	"log"
 	"os"
 	"reflect"

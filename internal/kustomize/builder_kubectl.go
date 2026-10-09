@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	cons "github.com/librucha/krmgen/internal/utils"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 )
 
 // kubectlBuilder renders by running the kubectl binary, which embeds its own

@@ -1,7 +1,7 @@
 package krmgen
 
 import (
-	"github.com/librucha/krmgen/version"
+	"github.com/librucha/krmgen/v2/version"
 )
 
 const VersionFunc = "krmgenVer"

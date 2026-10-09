@@ -2,7 +2,7 @@ package helm
 
 import (
 	"fmt"
-	types "github.com/librucha/krmgen/internal"
+	types "github.com/librucha/krmgen/v2/internal"
 	"regexp"
 	"strings"
 

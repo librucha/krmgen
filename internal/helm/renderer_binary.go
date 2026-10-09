@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	types "github.com/librucha/krmgen/internal"
+	types "github.com/librucha/krmgen/v2/internal"
 )
 
 // binaryRenderer renders by running the helm binary on the host, located via

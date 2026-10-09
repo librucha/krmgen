@@ -3,9 +3,9 @@ package helm
 import (
 	"fmt"
 	"github.com/google/uuid"
-	types "github.com/librucha/krmgen/internal"
-	"github.com/librucha/krmgen/internal/tool"
-	cons "github.com/librucha/krmgen/internal/utils"
+	types "github.com/librucha/krmgen/v2/internal"
+	"github.com/librucha/krmgen/v2/internal/tool"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 	"gopkg.in/yaml.v3"
 	"os"
 	"os/exec"

@@ -2,7 +2,7 @@ package helm
 
 import (
 	"errors"
-	types "github.com/librucha/krmgen/internal"
+	types "github.com/librucha/krmgen/v2/internal"
 	"reflect"
 	"strings"
 	"testing"

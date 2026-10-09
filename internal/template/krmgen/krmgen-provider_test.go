@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	appVer "github.com/librucha/krmgen/version"
+	appVer "github.com/librucha/krmgen/v2/version"
 )
 
 func TestResolveKrmgenVersion(t *testing.T) {

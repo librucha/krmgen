@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/librucha/krmgen/internal/config"
-	"github.com/librucha/krmgen/internal/redact"
-	"github.com/librucha/krmgen/internal/template"
-	cons "github.com/librucha/krmgen/internal/utils"
+	"github.com/librucha/krmgen/v2/internal/config"
+	"github.com/librucha/krmgen/v2/internal/redact"
+	"github.com/librucha/krmgen/v2/internal/template"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 	"os"

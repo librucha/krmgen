@@ -123,7 +123,7 @@ docker pull librucha/krmgen:latest
 ### Go install
 
 ```bash
-go install github.com/librucha/krmgen@latest
+go install github.com/librucha/krmgen/v2@latest
 ```
 
 ---

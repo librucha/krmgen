@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/librucha/krmgen/internal/config"
+	"github.com/librucha/krmgen/v2/internal/config"
 )
 
 // TestCopiedFilesAreNotWorldReadable covers every way krmgen puts something

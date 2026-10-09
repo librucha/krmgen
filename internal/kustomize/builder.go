@@ -3,7 +3,7 @@ package kustomize
 import (
 	"os"
 
-	cons "github.com/librucha/krmgen/internal/utils"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 )
 
 // Builder renders a prepared kustomization directory into YAML.

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	cons "github.com/librucha/krmgen/internal/utils"
+	cons "github.com/librucha/krmgen/v2/internal/utils"
 )
 
 func TestSelectRenderer(t *testing.T) {

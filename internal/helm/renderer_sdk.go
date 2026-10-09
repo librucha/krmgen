@@ -14,7 +14,7 @@ import (
 	"helm.sh/helm/v4/pkg/getter"
 	releasev1 "helm.sh/helm/v4/pkg/release/v1"
 
-	types "github.com/librucha/krmgen/internal"
+	types "github.com/librucha/krmgen/v2/internal"
 )
 
 // locateChart is a seam over (*action.ChartPathOptions).LocateChart: a
