@@ -245,6 +245,18 @@ func TestStripValues(t *testing.T) {
 			want:    "kind: KrmGen\n\n\n\n\n\nskip:\n  - '*.pfx'\n",
 		},
 		{
+			// Blanking lines would also wipe kind: KrmGen sharing the line,
+			// turning the config into nothing - so flow style is left as is.
+			name:    "flow-style root is untouched",
+			content: "{kind: KrmGen, values: {pw: \"x\"}}\n",
+			want:    "{kind: KrmGen, values: {pw: \"x\"}}\n",
+		},
+		{
+			name:    "multi-line flow-style root is untouched",
+			content: "{kind: KrmGen,\n values: {pw: \"x\"}\n}\n",
+			want:    "{kind: KrmGen,\n values: {pw: \"x\"}\n}\n",
+		},
+		{
 			name:    "values last",
 			content: "kind: KrmGen\nskip: []\nvalues:\n  a: b\n  c: d\n",
 			want:    "kind: KrmGen\nskip: []\n\n\n\n",

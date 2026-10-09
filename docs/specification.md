@@ -266,7 +266,10 @@ selects:
    to the next top-level key, the next document or EOF becomes an empty line,
    so line numbers in template errors stay right. Values are therefore
    evaluated exactly once, in step 3 — a resolved value holding a quote cannot
-   break the file's YAML on a second rendering.
+   break the file's YAML on a second rendering. A flow-style file
+   (`{kind: KrmGen, values: {...}}`) is not blanked — its keys share lines,
+   so blanking would wipe `kind` too; its values block is rendered a second
+   time, and a file that no longer parses fails the run (step 5).
 5. For each `kind: KrmGen` file at the top level of the working directory
    (non-recursively, processed in directory-listing order), run the following
    **as one pass, per config file** — not as two global phases:
@@ -308,8 +311,8 @@ values:
   `values in <file>: <path> has a non-string key - quote templated values`. A
   file that genuinely fails to parse as YAML is skipped silently and its values
   surface as a missing-key error at first use. If such a top-level file still
-  has a `kind: KrmGen` line but is not valid YAML after templating, the run
-  fails with `config file <name> is not valid YAML after templating: <err>`
+  declares `kind: KrmGen` (block or flow style) but is not valid YAML after
+  templating, the run fails with `config file <name> is not valid YAML after templating: <err>`
   instead of skipping it and printing nothing.
 - Every string leaf is a Go template, evaluated in document order with the
   values resolved before it in scope — including earlier siblings in the same

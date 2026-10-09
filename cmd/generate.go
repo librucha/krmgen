@@ -213,8 +213,9 @@ func processWorkDir(workDir string) error {
 	return nil
 }
 
-// krmGenKindLine matches a top-level kind: KrmGen line in raw content.
-var krmGenKindLine = regexp.MustCompile(`(?m)^kind:\s*["']?KrmGen["']?\s*$`)
+// krmGenKindLine matches kind: KrmGen in raw content, either as a block-style
+// top-level line or as an entry of a flow-style mapping ({kind: KrmGen, ...}).
+var krmGenKindLine = regexp.MustCompile(`(?m)(^|[{,]\s*)kind:\s*["']?KrmGen["']?\s*($|[,}])`)
 
 // checkConfigYAML returns the YAML error of a file that declares kind: KrmGen
 // but does not parse. IsConfigFile treats such a file as "not a config" and

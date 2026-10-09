@@ -67,6 +67,14 @@ func StripValues(content []byte) []byte {
 	if err != nil || root == nil || keyIndex < 0 {
 		return content
 	}
+	// A flow-style root ({kind: KrmGen, values: {...}}) shares lines between
+	// keys, so blanking the values lines would wipe kind as well and the file
+	// would silently stop being a config. Leave it as is: its values are then
+	// rendered a second time, and processWorkDir still fails on a KrmGen file
+	// that no longer parses.
+	if root.Style&yaml.FlowStyle != 0 {
+		return content
+	}
 	lines := strings.Split(string(content), "\n")
 	from := root.Content[keyIndex].Line - 1
 	to := len(lines)

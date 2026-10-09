@@ -483,12 +483,19 @@ func TestGenerate_ValuesAreEvaluatedOnce(t *testing.T) {
 }
 
 func TestProcessWorkDir_BrokenKrmGenFileFails(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "krmgen.yaml"), []byte("kind: KrmGen\nfoo: 'it's'\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	err := processWorkDir(dir)
-	if err == nil || !strings.Contains(err.Error(), "config file krmgen.yaml is not valid YAML after templating: ") {
-		t.Errorf("err = %v, want the invalid YAML error", err)
+	for name, content := range map[string]string{
+		"block style": "kind: KrmGen\nfoo: 'it's'\n",
+		"flow style":  "{kind: KrmGen, values: {pw: 'it's'}}\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "krmgen.yaml"), []byte(content), 0600); err != nil {
+				t.Fatal(err)
+			}
+			err := processWorkDir(dir)
+			if err == nil || !strings.Contains(err.Error(), "config file krmgen.yaml is not valid YAML after templating: ") {
+				t.Errorf("err = %v, want the invalid YAML error", err)
+			}
+		})
 	}
 }
