@@ -26,7 +26,7 @@ import (
 // scenarios that never set KRMGEN_HELM_EXECUTABLE and render exclusively
 // through the embedded library - fails if the `helm` binary on PATH drifts
 // from anchorHelmVersion. The two helm anchors agree
-// today (both name v4.2.4) by coincidence, not by construction: nothing keeps
+// today (both name v4.3.0) by coincidence, not by construction: nothing keeps
 // go.mod's helm.sh/helm/v4 dependency and the reference external binary in
 // lockstep. The installed kubectl's Kustomize version still has to match a
 // reference too, because the same
@@ -41,7 +41,7 @@ import (
 // installed on the machine that generated them.
 //
 // anchorHelmVersion is the `helm version --short` output of that reference
-// helm (a released v4.2.4 build; the "+g..." suffix is helm's normal
+// helm (a released v4.3.0 build; the "+g..." suffix is helm's normal
 // embedded-commit build metadata, not a dev build).
 const anchorHelmVersion = "v4.3.0+gbec5b06"
 
@@ -156,7 +156,7 @@ func TestEmbeddedKustomizeMatchesTheAnchor(t *testing.T) {
 // KRMGEN_HELM_EXECUTABLE selects the binary renderer. Before this phase the
 // two happened to be the same helm build, so this distinction was invisible;
 // now that the embedded library is the default, only this anchor governs it.
-const anchorHelmLibraryVersion = "v4.2.4"
+const anchorHelmLibraryVersion = "v4.3.0"
 
 // TestEmbeddedHelmMatchesTheAnchor is the helm sibling of
 // TestEmbeddedKustomizeMatchesTheAnchor above - same reasoning, same

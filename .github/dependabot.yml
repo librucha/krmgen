@@ -19,8 +19,11 @@ updates:
       golang-x:
         patterns:
           - "golang.org/x/*"
-      # A helm bump changes rendered output: update anchorHelmVersion in
-      # test/golden/versions_test.go and regenerate the goldens with -update.
+      # A helm bump changes rendered output: update anchorHelmVersion and
+      # anchorHelmLibraryVersion in test/golden/versions_test.go, the helm
+      # `version:` pinned in .github/workflows/go.yml and prepare-feature.yml
+      # (Dependabot does not bump action inputs), and regenerate the goldens
+      # with -update.
       helm:
         patterns:
           - "helm.sh/*"
