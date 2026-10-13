@@ -43,7 +43,7 @@ import (
 // anchorHelmVersion is the `helm version --short` output of that reference
 // helm (a released v4.2.4 build; the "+g..." suffix is helm's normal
 // embedded-commit build metadata, not a dev build).
-const anchorHelmVersion = "v4.2.4+g3900f43"
+const anchorHelmVersion = "v4.3.0+gbec5b06"
 
 // anchorKustomizeVersion is the "Kustomize Version" line reported by
 // `kubectl version --client` for the reference kubectl (v1.36.3). It only
