@@ -1,0 +1,48 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # The Azure SDK modules move together; one PR per bump would be noise.
+      azure-sdk:
+        patterns:
+          - "github.com/Azure/*"
+          - "github.com/AzureAD/*"
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
+      # A helm bump changes rendered output: update anchorHelmVersion in
+      # test/golden/versions_test.go and regenerate the goldens with -update.
+      helm:
+        patterns:
+          - "helm.sh/*"
+      # helm and kustomize both build on these; bumping them apart breaks
+      # the build, so they land in one PR.
+      kubernetes:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      # Batch action bumps into one PR per week.
+      actions:
+        patterns:
+          - "*"
