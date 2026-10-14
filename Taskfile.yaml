@@ -126,9 +126,13 @@ tasks:
       - goreleaser release --clean --auto-snapshot
 
   upgrade:
-    desc: "Upgrade Go and all dependencies"
+    desc: "Upgrade direct dependencies (indirect ones move only as far as they need to)"
+    # Not `go get -u all`: that forces every indirect module to its latest
+    # release too, which breaks on modules whose latest tag is older than the
+    # pseudo-version in use (gobwas/glob) or that dropped packages their
+    # dependents still import (k8s.io/kube-openapi vs k8s.io/apimachinery).
     cmds:
-      - go get -v -u all
+      - go get $(go list -m -f '{{"{{"}}if not (or .Indirect .Main){{"}}"}}{{"{{"}}.Path{{"}}"}}{{"{{"}}end{{"}}"}}' all)
       - go mod tidy
 
   install:
