@@ -528,12 +528,22 @@ at `internal/template/template.go`.
 | `azPfxCrt <vault> <secret> [version]` | 2–3 | Certificate chain extracted from a PKCS12 secret |
 | `azStoreKey <subscription> <resourceGroup> <account>` | 3 | Storage account key |
 | `azUserIdentityClientId <resourceGroup> <name>` | 2 | Client ID of a user-assigned managed identity |
+| `entraAppClientId <displayName>` | 1 | Application (client) ID of an Entra ID app registration; `entraApplicationClientId` is an alias |
 | `toPem <type> <data>` | 2 | Wraps bytes in a PEM block |
 
 `azUaIdClientId` remains registered as a deprecated alias of
 `azUserIdentityClientId` — see Naming note below. It is krmgen's own alias,
 registered in `internal/template/template.go`, not something the library
 exposes.
+
+`entraAppClientId` (alias `entraApplicationClientId`, both from the library)
+queries Microsoft Graph
+(`GET /v1.0/applications?$filter=displayName eq '<name>'`) and returns the
+match's `appId`. Display names are not unique in Entra ID, so no match or more
+than one match is an error, not a guess. The credential needs
+`Application.Read.All` on Microsoft Graph, or must own the application. Only
+the public cloud's Graph endpoint, `graph.microsoft.com`, is supported.
+Available since `cloud-go-templates` v0.2.0.
 
 **`azKey` does not return a private key, despite the PEM header.** The
 library's key provider builds the PEM block from the RSA **modulus**, which

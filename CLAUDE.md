@@ -45,7 +45,7 @@ internal/
     files/              → readF func (read local relative file)
     krmgen/             → krmgenVer, krmgenGenerated funcs
     (Azure functions — azSec, toPem, azPfxKey, azPfxCrt, azCert, azKey,
-     azStoreKey, azUserIdentityClientId — come from the
+     azStoreKey, azUserIdentityClientId, entraAppClientId — come from the
      github.com/librucha/cloud-go-templates dependency, not from this repo)
   redact/redact.go      → Credentials / Error — masks URL passwords on the way out
   tool/tool.go          → RunCommand wrapper for external binaries
@@ -71,6 +71,7 @@ docs/specification.md   → product contract: what krmgen accepts, produces, gua
 | `azKey <vault> <key> [version]` | RSA modulus, PEM-encoded under a `"... PRIVATE KEY"` header — not actually a private key, see specification |
 | `azStoreKey <subscription> <resourceGroup> <account>` | Azure Storage account key |
 | `azUserIdentityClientId <resourceGroup> <name>` | Azure Managed Identity client ID |
+| `entraAppClientId <displayName>` | Entra ID app registration client ID via Microsoft Graph (alias `entraApplicationClientId`) |
 | `azUaIdClientId <resourceGroup> <name>` | Deprecated alias for `azUserIdentityClientId`, kept for backward compatibility |
 | `argocdEnv <key> [default]` | Read `ARGOCD_ENV_<key>` / `ARGOCD_APP_<key>` |
 | `kubeEnv <key> [default]` | Read `KUBE_<key>` env var |

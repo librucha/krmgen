@@ -321,6 +321,20 @@ storageKey: '{{ azStoreKey "00000000-0000-0000-0000-000000000000" "my-rg" "mysto
 clientId: '{{ azUaIdClientId "my-rg" "my-workload-identity" }}'
 ```
 
+### Entra ID application
+
+| Function | Signature | Description |
+|---|---|---|
+| `entraAppClientId` | `entraAppClientId <displayName>` | Application (client) ID of an Entra ID app registration, looked up by display name through Microsoft Graph (alias `entraApplicationClientId`) |
+
+```yaml
+app-id: '{{ entraAppClientId "rixo-external-api" }}'
+```
+
+The display name must match exactly one app registration — none or several
+is an error. The Azure credential needs `Application.Read.All` on Microsoft
+Graph (or must own the application); only the public cloud is supported.
+
 ---
 
 ## Examples

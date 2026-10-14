@@ -128,6 +128,7 @@ func TestEvalGoTemplates_RegistersEveryDocumentedFunction(t *testing.T) {
 		"argocdEnv", "kubeEnv", "readF",
 		"azSec", "toPem", "azPfxKey", "azPfxCrt",
 		"azCert", "azKey", "azStoreKey", "azUserIdentityClientId",
+		"entraAppClientId", "entraApplicationClientId",
 		"azUaIdClientId",
 		// a sprig function, to prove sprig is still merged in
 		"upper",

@@ -65,7 +65,7 @@ The container runs as UID 999, so the mounted directory must be readable by
 that UID. krmgen only reads the source directory; its working copy goes to
 the container's temp directory and is removed when the run ends.
 
-### Azure Key Vault / Storage / Managed Identity
+### Azure Key Vault / Storage / Managed Identity / Entra ID
 
 Template functions authenticate with the Azure SDK's `DefaultAzureCredential`,
 so the standard variables work:
