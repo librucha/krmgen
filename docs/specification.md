@@ -739,7 +739,7 @@ Section 6 — is enforced by `TestGolden_BothBackendsAgree` and
 `TestGolden_BothBackendsAgreeOnErrors` (`test/golden/harness_test.go`) and was
 last verified against kubectl v1.36.3, which embeds Kustomize v5.8.1.
 
-krmgen embeds `helm.sh/helm/v4` v4.2.4 (pinned in `go.mod`; see
+krmgen embeds `helm.sh/helm/v4` v4.3.2 (pinned in `go.mod`; see
 `anchorHelmLibraryVersion`, `test/golden/versions_test.go`, which asserts this
 version is what actually ships in the built binary). Parity between the
 embedded library and the external `helm` binary is enforced by
@@ -747,7 +747,7 @@ embedded library and the external `helm` binary is enforced by
 OCI-scenario sibling `TestOci_BothHelmRenderersAgree`
 (`test/golden/oci_test.go`, behind the `oci` build tag), and was last verified
 against the reference external helm build named by `anchorHelmVersion`
-(`test/golden/versions_test.go`), v4.2.4+g3900f43.
+(`test/golden/versions_test.go`), v4.3.2+g8346aaa.
 
 ### Invocation
 
@@ -775,7 +775,7 @@ since task 4 of that phase.
    validation of its own; krmgen does still produce
    `helm template  --include-crds ...` with an empty positional argument when
    `releaseName` is unset, but helm does **not** accept it: measured on the
-   anchor v4.2.4 (`test/golden/versions_test.go`), both backends exit 1 with
+   anchor v4.3.2 (`test/golden/versions_test.go`), both backends exit 1 with
    `release name "": no name provided`)
 3. `--include-crds` — passed **unconditionally**, on every invocation,
    regardless of config
@@ -876,12 +876,12 @@ role on the registry.
 
 | Tool | Supported | Verified against |
 |---|---|---|
-| helm (external binary backend only) | 3.8.0 and later, including 4.x | v3.8.2, v3.21.4, v4.2.4 |
-| helm (embedded library backend) | pinned in `go.mod`, not a range | v4.2.4 |
+| helm (external binary backend only) | 3.8.0 and later, including 4.x | v3.8.2, v3.21.4, v4.3.2 |
+| helm (embedded library backend) | pinned in `go.mod`, not a range | v4.3.2 |
 | kubectl (external kustomize backend only) | any release providing `kubectl kustomize` | v1.36.3 / Kustomize v5.8.1 |
 
 **Why helm 3.8.0 is the floor.** This floor applies to the external binary
-backend only — the embedded library is always `helm.sh/helm/v4` v4.2.4, well
+backend only — the embedded library is always `helm.sh/helm/v4` v4.3.2, well
 past the 3.8.0 floor, so it always supports OCI unconditionally. OCI registry
 support became generally available in helm 3.8.0. Earlier releases treat it
 as experimental and refuse to act on an `oci://` reference unless
@@ -953,7 +953,7 @@ result still is: helm's own CLI (`pkg/cmd/template.go`) defaults its
 `--api-versions` flag to `[]string{}` and unconditionally assigns that to
 `client.APIVersions`, an empty but **non-nil** slice — the embedded renderer
 never touches the field, so it stays **nil**. This does not produce different
-`.Capabilities`: `action.Install.RunWithContext` (`pkg/action/install.go:336`)
+`.Capabilities`: `action.Install.RunWithContext` (`pkg/action/install.go:347`)
 only does `i.cfg.Capabilities.APIVersions = append(i.cfg.Capabilities.APIVersions,
 i.APIVersions...)`, and appending an empty slice or a nil slice is the same
 no-op either way.
@@ -966,7 +966,7 @@ its `RunWithContext` (`pkg/action/install.go`) — the *same* function, not a
 reimplementation — so leaving `KubeVersion`/`APIVersions` unset (or set to an
 empty slice, on the CLI side) produces identical `.Capabilities` defaults on
 both backends whenever they run the same helm version, confirmed by reading
-`helm.sh/helm/v4@v4.2.4`'s `pkg/cmd/template.go` and `pkg/action/install.go`
+`helm.sh/helm/v4@v4.3.2`'s `pkg/cmd/template.go` and `pkg/action/install.go`
 side by side. No golden fixture exercises this directly — none of the demo
 charts read `.Capabilities` — so this is a code-reading confirmation, not a
 test result.
@@ -975,7 +975,7 @@ The risk that remains, and always did, is across *different* helm versions: a
 chart that branches on `.Capabilities.KubeVersion` or `.Capabilities.APIVersions`
 still renders differently depending on which helm version is invoked, because
 different helm versions ship different built-in defaults for a client-only
-`template` run. An external binary older or newer than the pinned v4.2.4
+`template` run. An external binary older or newer than the pinned v4.3.2
 embedded library is exactly such a case. This is not something krmgen
 controls or records.
 
@@ -1046,7 +1046,7 @@ with credentials via the external binary ends up with those credentials
 cached in helm's config file for every later invocation on that host; the
 same run via the embedded library leaves no such trace. This was verified by
 reading `registry.NewClient`/`ClientOptBasicAuth`
-(`helm.sh/helm/v4@v4.2.4/pkg/registry/client.go`) and `ociHelmGenerator.login`
+(`helm.sh/helm/v4@v4.3.2/pkg/registry/client.go`) and `ociHelmGenerator.login`
 side by side, not by a test — asserting "no file was written" would require
 controlling `$HOME`/`HELM_REGISTRY_CONFIG` around a real `helm registry
 login` subprocess, out of scope here. Rendered *output* is unaffected: both
