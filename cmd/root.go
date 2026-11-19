@@ -17,5 +17,6 @@ func NewRootCommand(version string) *cobra.Command {
 	}
 	appVer.AppVersion = version
 	command.AddCommand(NewGenerateCommand())
+	command.AddCommand(NewTemplateCommand())
 	return command
 }
