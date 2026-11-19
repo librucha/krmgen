@@ -71,6 +71,7 @@ func TestTemplate_Output(t *testing.T) {
 		// A template that starts with a dash would otherwise be parsed as a flag.
 		{name: "leading dash after --", args: []string{"--", "-x"}, want: "-x"},
 		{name: "empty template", args: []string{""}, want: ""},
+		{name: "whitespace-only template", args: []string{" \n "}, want: " \n "},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -89,23 +90,78 @@ func TestTemplate_Errors(t *testing.T) {
 	yamlFile := writeTemplateVarFile(t, "v.yaml", "ns: from-file\n")
 	txtFile := writeTemplateVarFile(t, "v.txt", "ns: from-file\n")
 
+	const hint = "use --var key=value or --var-file"
 	cases := []struct {
 		name string
 		args []string
-		// wantIn lists substrings the error must carry.
+		// wantIn lists substrings the error must carry, notIn ones it must not.
 		wantIn []string
+		notIn  []string
 	}{
-		{name: "no arguments", args: nil},
-		{name: "two positional arguments", args: []string{"a", "b"}},
-		{name: "missing key", args: []string{"{{ .Values.missing }}"}, wantIn: []string{"missing", "--var"}},
-		{name: "parse error", args: []string{"{{ .Values.ns"}},
-		{name: "var without equals", args: []string{"--var", "ns", "x"}, wantIn: []string{"ns"}},
-		{name: "unsupported var file extension", args: []string{"--var-file", txtFile, "x"}, wantIn: []string{txtFile}},
+		{name: "no arguments", args: nil, wantIn: []string{"exactly one <template> argument", "got 0"}},
+		{name: "two positional arguments", args: []string{"a", "b"}, wantIn: []string{"exactly one <template> argument", "got 2"}},
+		{name: "missing key", args: []string{"{{ .Values.missing }}"}, wantIn: []string{`"missing"`, hint}},
+		{
+			// Text before the failing action must not leak out: the result
+			// is printed only once the whole template has evaluated.
+			name:   "missing key after literal text",
+			args:   []string{"printed-too-early {{ .Values.missing }}"},
+			wantIn: []string{`"missing"`, hint},
+		},
+		// The hint is about a variable nobody passed; a template that does
+		// not even parse has a different problem.
+		{name: "parse error", args: []string{"{{ .Values.ns"}, wantIn: []string{"template evaluation failed"}, notIn: []string{hint}},
+		{
+			name:   "function failure is not a missing variable",
+			args:   []string{`{{ fail "boom" }}`},
+			wantIn: []string{"boom"},
+			notIn:  []string{hint},
+		},
+		{
+			// A function may fail with an error quoting a URL that carries a
+			// credential; the password must not reach stderr.
+			name:   "URL password in an error is masked",
+			args:   []string{`{{ fail "cloning https://user:s3cr3t-token@example.com/repo failed" }}`},
+			wantIn: []string{"user:***@example.com"},
+			notIn:  []string{"s3cr3t-token"},
+		},
+		{
+			name:   "var without equals",
+			args:   []string{"--var", "ok=1", "--var", "password:s3cr3t-token", "x"},
+			wantIn: []string{"--var #2", "key=value"},
+			notIn:  []string{"s3cr3t-token"},
+		},
+		{
+			name:   "var value is not echoed",
+			args:   []string{"--var", "a=1", "--var", "a.password=s3cr3t-token", "x"},
+			wantIn: []string{"--var #2", `"a.password"`},
+			notIn:  []string{"s3cr3t-token"},
+		},
+		{name: "unsupported var file extension", args: []string{"--var-file", txtFile, "x"}, wantIn: []string{txtFile, ".yaml"}},
 		{
 			// The second file must not silently win over the first.
 			name:   "var file given twice",
 			args:   []string{"--var-file", yamlFile, "--var-file", yamlFile, "x"},
-			wantIn: []string{"--var-file"},
+			wantIn: []string{"--var-file given 2 times"},
+		},
+		{
+			// A template starting with a dash and passed without -- is
+			// rejected by flag parsing, before the command runs. That error
+			// quotes the argument, so it needs the same masking - and it
+			// should say what to do.
+			name:   "template starting with a dash without --",
+			args:   []string{"-xhttps://user:s3cr3t-token@example.com/"},
+			wantIn: []string{"must follow --"},
+			notIn:  []string{"s3cr3t-token"},
+		},
+		// The -- advice belongs to an unknown flag only.
+		{name: "flag without its value", args: []string{"--var"}, wantIn: []string{"--var"}, notIn: []string{"must follow --"}},
+		{
+			// What an unset shell variable produces: --var-file "$VARS".
+			// Rendering without the variables would hide the mistake.
+			name:   "empty var file path",
+			args:   []string{"--var-file", "", "x"},
+			wantIn: []string{"--var-file", "empty"},
 		},
 	}
 	for _, tc := range cases {
@@ -120,6 +176,11 @@ func TestTemplate_Errors(t *testing.T) {
 			for _, want := range tc.wantIn {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("error %q does not mention %q", err, want)
+				}
+			}
+			for _, unwanted := range tc.notIn {
+				if strings.Contains(err.Error(), unwanted) {
+					t.Errorf("error %q must not contain %q", err, unwanted)
 				}
 			}
 		})

@@ -377,6 +377,10 @@ Good to know:
   never evaluated as a template itself.
 - A variable the template reads but nobody passed is an error, not an empty
   string. For an optional one use `{{ dig "ns" "default" .Values }}`.
+- A `.json` variables file is read by the YAML parser, so numbers keep their
+  type (`1000000` prints `1000000`). The flip side: the JSON-only `\/` escape
+  and `😀`-style surrogate pairs are rejected.
+- An error about a `--var` names its position and key, never its value.
 - Put `--` before a template that starts with a dash:
   `krmgen template -- '-{{ .Values.x }}'`.
 - Nothing is masked: a secret a function returns is printed in clear text,

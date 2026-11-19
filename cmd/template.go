@@ -47,6 +47,17 @@ Put -- before a template that starts with a dash.`,
 		},
 	}
 
+	// A flag-parsing error never reaches RunE, so it gets its masking here.
+	// It matters because the most likely one quotes the template itself: a
+	// template that starts with a dash and was passed without -- is parsed
+	// as a flag ("unknown shorthand flag: 'x' in -x...").
+	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		if strings.HasPrefix(err.Error(), "unknown ") {
+			err = fmt.Errorf("%w (a template that starts with a dash must follow --)", err)
+		}
+		return redact.Error(err)
+	})
+
 	// StringArray, not StringSlice: the slice variant splits a value on
 	// commas, turning --var hosts=a,b into two assignments.
 	// The back-quoted word is what pflag prints as the value placeholder in
@@ -64,6 +75,12 @@ func evalTemplate(cmd *cobra.Command, content string, varFiles []string, vars []
 	varFile := ""
 	if len(varFiles) == 1 {
 		varFile = varFiles[0]
+		// LoadVars reads "" as "no file". Here the flag was given, so an
+		// empty path is a mistake - typically --var-file "$VARS" with VARS
+		// unset - and evaluating without the variables would hide it.
+		if varFile == "" {
+			return fmt.Errorf("--var-file is given an empty path")
+		}
 	}
 	values, err := config.LoadVars(varFile, vars)
 	if err != nil {

@@ -203,15 +203,28 @@ krmgen template --var-file variables.yaml --var ns='black widow' --var env=prod 
   so an expression copied from a file of a krmgen project evaluates unchanged.
   With no variables passed `.Values` is an empty mapping.
 - **`--var-file`** names one file with the extension `.yaml`, `.yml` or
-  `.json` (case-insensitive); any other extension is an error. All three are
-  decoded as YAML, so the types match `values:` — in particular a JSON number
-  such as `1000000` stays an integer and prints as `1000000`, not `1e+06` —
-  and a `.json` file holding YAML-only syntax is not rejected. The top level
-  must be a mapping with string keys; an empty file, or one holding only
-  comments, declares no variables. Of a multi-document file only the first
-  document is read. Passing the flag twice is an error
+  `.json` (case-insensitive); any other extension is an error. The top level
+  must be a mapping; an empty file, or one holding only comments, declares no
+  variables. Of a multi-document file only the first document is read.
+  Passing the flag twice is an error
   (`--var-file given <n> times, only one variables file is supported`), not
-  "last one wins".
+  "last one wins", and so is an empty path (`--var-file "$UNSET"`:
+  `--var-file is given an empty path`).
+- **All three extensions are parsed as YAML**, and a value gets the type it
+  would have under `values:`. An integer that fits in 64 bits stays an
+  integer, so JSON `1000000` prints as `1000000`; a number written as a float
+  prints in Go's `%v` form, as it does under `values:` (`1000000.0` and `1e6`
+  both print `1e+06`). YAML's own typing applies to unquoted scalars
+  (`2026-11-19` is a timestamp, `010` is 8). Two consequences for `.json`:
+  a file holding YAML-only syntax is not rejected, and the few JSON constructs
+  YAML does not share are — the `\/` escape and a `😀` surrogate
+  pair both fail with a YAML parse error.
+- **A key is its text, at any depth**, as under `values:`: `ports: {80: http}`
+  is read with `{{ index .Values.ports "80" }}`. The same checks as for
+  `values:` apply inside the file: a key repeated in one mapping
+  (`<path> is defined twice`), a YAML merge key (`<<`) and a mapping or list
+  used as a key are errors; anchors and aliases are resolved, each alias into
+  its own copy.
 - **`--var key=value`** is split at the first `=`, so the value may be empty
   and may itself contain `=` or commas. The value is always a string:
   `--var replicas=3` yields `"3"`. Typed values, lists and mappings come from
@@ -222,17 +235,28 @@ krmgen template --var-file variables.yaml --var ns='black widow' --var env=prod 
   `.Values.db.host`, creating `db` when it is missing and leaving its other
   keys alone when it came from the file. If a level on the way exists and is
   not a mapping — the file has `db: prod-db` — the run fails
-  (`invalid --var "db.host=x": db is already set and is not a mapping`)
-  rather than replacing it. The last segment is always assigned, even over a
-  mapping: `--var db=x` replaces a `db` mapping with the string `x`.
+  (`invalid --var #1: key "db.host": db is already set and is not a mapping`)
+  rather than replacing it; a level that is null (`db:` with nothing below)
+  is filled in like a missing one. The last segment is always assigned, even
+  over a mapping: `--var db=x` replaces a `db` mapping with the string `x`.
+  Every dot separates: a file key that itself contains a dot (`"a.b": 1`)
+  cannot be addressed by `--var`, which sets `.Values.a.b` beside it.
 - **Variables are literal.** Neither a `--var` value nor a string in the
   file is evaluated as a template, unlike `values:` in a KrmGen file: a file
   value of `'{{ krmgenVer }}'` is that text.
 - **Errors.** No `=` in a `--var`, an empty key, or an empty key segment
-  (`a..b`) is an error that quotes the offending argument. A reference to a
-  variable nobody passed fails with the template engine's missing-key error
-  plus `(variable not passed: use --var key=value or --var-file)`. Every
-  error passes through the same URL-credential masking as `generate`'s.
+  (`a..b`) is an error. A `--var` error names the flag by its position among
+  the `--var` flags and, when it has one, the key — never the value, which
+  may be a secret: `invalid --var #2: expected key=value`. A variables-file
+  error names the file and the key path, never a value. A failing template
+  expression that names `.Values` and a key missing from a mapping gets
+  `(variable not passed: use --var key=value or --var-file)` appended to the
+  template engine's error; a missing key reached another way
+  (`{{ with .Values }}{{ .x }}{{ end }}`) fails without that hint. An
+  unknown-flag error — what a template starting with a dash produces without
+  `--` — gets `(a template that starts with a dash must follow --)`. Errors of
+  evaluation, of variable loading and of flag parsing pass through the same
+  URL-credential masking as `generate`'s.
 - **Nothing is hidden.** What a function returns — a secret read by `azSec`,
   for instance — is printed to stdout in clear text, exactly as `generate`
   would write it into a manifest. A `--var` value is part of the command line,
