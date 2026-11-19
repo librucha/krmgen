@@ -68,7 +68,7 @@ func (g ociHelmGenerator) addCredentials(in []string) []string {
 // settings.RegistryConfig - the same file the external binary's `helm
 // registry login` would have written to, read here but never written to -
 // mirroring newDefaultRegistryClient in helm's own
-// pkg/cmd/template.go (helm.sh/helm/v4@v4.2.4).
+// pkg/cmd/root.go (helm.sh/helm/v4@v4.3.2).
 func (g ociHelmGenerator) registryClient(settings *cli.EnvSettings) (*registry.Client, error) {
 	opts := []registry.ClientOption{
 		registry.ClientOptDebug(settings.Debug),
@@ -76,7 +76,7 @@ func (g ociHelmGenerator) registryClient(settings *cli.EnvSettings) (*registry.C
 		registry.ClientOptCredentialsFile(settings.RegistryConfig),
 	}
 	// helm itself only applies these credentials when both are present
-	// (registry.Client.NewClient, helm.sh/helm/v4@v4.2.4 pkg/registry/client.go:127:
+	// (registry.Client.NewClient, helm.sh/helm/v4@v4.3.2 pkg/registry/client.go:127:
 	// `if client.username != "" && client.password != ""`); a username-only or
 	// password-only config falls through to the on-disk credentials store there
 	// regardless of what ClientOptBasicAuth was given. Matching the condition

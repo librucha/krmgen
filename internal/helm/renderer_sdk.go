@@ -27,7 +27,7 @@ var locateChart = func(opts *action.ChartPathOptions, name string, settings *cli
 }
 
 // checkIfInstallable mirrors helm's own checkIfInstallable
-// (pkg/cmd/install.go:358-366): only an "application" chart (or one with no
+// (pkg/cmd/install.go:363-371): only an "application" chart (or one with no
 // Type set at all) may be rendered. helm's function is unexported, so this
 // repeats its logic rather than calling it; the error text is copied
 // verbatim because it is what the binary renderer's `helm template` prints
@@ -84,7 +84,7 @@ func (sdkRenderer) Render(cfg *types.HelmChart, g generator, workDir string) (st
 	// segment and 404s.
 	//
 	// RepoURL must stay empty for these: ChartPathOptions.LocateChart
-	// (helm.sh/helm/v4@v4.2.4, pkg/action/install.go) treats a non-empty
+	// (helm.sh/helm/v4@v4.3.2, pkg/action/install.go) treats a non-empty
 	// RepoURL as an HTTP chart-repo index lookup (repo.FindChartInRepoURL),
 	// which does not understand oci:// at all. Passing cfg.RepoUrl as the
 	// name instead, with RepoURL left unset, is what routes LocateChart
@@ -112,12 +112,12 @@ func (sdkRenderer) Render(cfg *types.HelmChart, g generator, workDir string) (st
 
 	// action.Install.RunWithContext (called below) never runs helm CLI's
 	// pre-render gate: `helm template` only gets it because runInstall
-	// (pkg/cmd/install.go:291,303) runs it before calling RunWithContext, and
+	// (pkg/cmd/install.go:292,308) runs it before calling RunWithContext, and
 	// that gate lives in the cmd package, not in action. Skipped, a
 	// `type: library` chart renders as an empty manifest with exit 0 - and
 	// krmgen runs as an ArgoCD CMP plugin, where success with empty output
 	// means "no resources", i.e. prune everything. Replicate both checks the
-	// CLI does, reading metadata through chart.NewAccessor as install.go:286
+	// CLI does, reading metadata through chart.NewAccessor as install.go:287
 	// does - helm v4 abstracts chart-version differences behind Accessor on
 	// purpose, and reading the struct directly would bypass that.
 	ac, err := chart.NewAccessor(loaded)
