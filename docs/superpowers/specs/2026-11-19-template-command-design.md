@@ -1,7 +1,7 @@
 # `krmgen template` command — design
 
 Date: 2026-11-19
-Status: design awaiting approval, not yet implemented
+Status: implemented
 
 ## Goal
 

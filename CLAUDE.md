@@ -18,12 +18,15 @@ cmd/generate.go    → "generate <path>" command:
                          except those matching skip patterns — copied as-is)
                       4. find KrmGen config files (kind: KrmGen)
                       5. ProcessConfig → helm + kustomize → stdout
+cmd/template.go    → "template <template>" command: evaluate one Go template string,
+                      variables from --var-file / --var under .Values, print the result
 
 internal/
   types.go              → Config, Metadata, Helm, HelmChart types
   config/parser.go      → IsConfigFile, ParseConfig (YAML unmarshal)
   config/processor.go   → ProcessConfig: orchestrates helm + kustomize
   config/values.go      → ResolveValues: values: of KrmGen files → .Values template data
+  config/vars.go        → LoadVars: --var-file / --var of the template command → .Values template data
   helm/
     generator.go        → generator interface, OCI vs HTTP repo detection
     repo-generator.go   → HTTP repo helm generator
@@ -120,6 +123,20 @@ values:
 # secret.yaml
 stringData:
   password: '{{ azSec .Values.keyvault "db-secret" }}'
+```
+
+## Template command
+
+`krmgen template '<template>'` evaluates one Go template string through the same
+`template.EvalGoTemplates` as `generate` and prints the result exactly (no newline added). It
+reads no source directory. Variables come from `--var-file <file>` (`.yaml`, `.yml`, `.json`, all
+decoded as YAML, one file only) and repeatable `--var key=value` (always a string, overrides the
+file, dotted key = nested value), and are exposed under `.Values`. Unlike `values:` they are
+literal, never evaluated as templates.
+
+```bash
+krmgen template '{{ krmgenGenerated }}'                       # krmgen-2.0.3
+krmgen template --var-file variables.yaml --var ns='black widow' '{{ .Values.ns }}'
 ```
 
 ## Environment variables

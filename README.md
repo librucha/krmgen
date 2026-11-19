@@ -20,6 +20,7 @@ Designed for GitOps pipelines (ArgoCD, Flux) where you need fully-rendered, stat
 - [Quick start](#quick-start)
 - [Configuration reference](#configuration-reference)
 - [Template functions](#template-functions)
+- [Evaluating a single template](#evaluating-a-single-template)
 - [Examples](#examples)
 - [Docker](#docker)
 - [Environment variables](#environment-variables)
@@ -66,6 +67,7 @@ The key insight is step 1: **all files are Go-template-evaluated before Helm or 
 - **Azure Key Vault integration** — fetch secrets, certificates, and keys directly into templates
 - **ArgoCD & Kubernetes env vars** — read `ARGOCD_ENV_*` / `ARGOCD_APP_*` / `KUBE_*` variables
 - **Local file inclusion** — embed file contents into templates with `readF`
+- **One-off template evaluation** — `krmgen template '{{ ... }}'` runs a single expression with the same functions, with variables from `--var` / `--var-file`
 - **Skip patterns** — exclude binary or generated files from template evaluation via glob patterns (`*.pfx`, `assets/*.png`)
 - **OCI registry support** — Helm charts from OCI registries (`oci://`), with passwordless Azure Container Registry login through Workload Identity
 - **Secret-safe diagnostics** — a failing run never echoes rendered resources or a URL password to stderr (see [Secret handling](#secret-handling))
@@ -334,6 +336,52 @@ app-id: '{{ entraAppClientId "rixo-external-api" }}'
 The display name must match exactly one app registration — none or several
 is an error. The Azure credential needs `Application.Read.All` on Microsoft
 Graph (or must own the application); only the public cloud is supported.
+
+---
+
+## Evaluating a single template
+
+`krmgen template` evaluates one Go template string with the same functions
+and prints the result — no source directory, no `krmgen.yaml`, no helm or
+kustomize. Use it to try a function, to check an expression before it goes
+into a config file, or to call krmgen's functions from a shell script.
+
+```bash
+krmgen template '{{ krmgenGenerated }}'
+# krmgen-2.0.3
+```
+
+Variables are passed on the command line and read as `.Values.<key>`, the same
+way a file rendered by `krmgen generate` reads its `values:` — an expression
+copied from a project file runs unchanged:
+
+```bash
+krmgen template --var-file variables.yaml --var ns='black widow' --var env=prod \
+  '{{ .Values.ns }}/{{ .Values.env }}'
+# black widow/prod
+
+krmgen template --var keyvault=my-vault '{{ azSec .Values.keyvault "db-password" }}'
+```
+
+| Flag | Description |
+|---|---|
+| `--var key=value` | One variable. Repeatable; overrides the same key from `--var-file`, and a later `--var` overrides an earlier one. The value is always a string. A dotted key sets a nested value: `--var db.host=x` is `.Values.db.host` |
+| `--var-file <file>` | A `.yaml`, `.yml` or `.json` file whose top-level mapping becomes `.Values`. One file only. Use it for numbers, lists and nested mappings |
+
+Good to know:
+
+- The result is printed exactly as evaluated — no trailing newline is added,
+  so `krmgen template '{{ azCert "my-vault" "tls" }}' > tls.pem` writes
+  the certificate and nothing else.
+- Variable values are literal. Unlike `values:` in `krmgen.yaml`, a value is
+  never evaluated as a template itself.
+- A variable the template reads but nobody passed is an error, not an empty
+  string. For an optional one use `{{ dig "ns" "default" .Values }}`.
+- Put `--` before a template that starts with a dash:
+  `krmgen template -- '-{{ .Values.x }}'`.
+- Nothing is masked: a secret a function returns is printed in clear text,
+  and a `--var` value is visible in your shell history and in the process
+  table.
 
 ---
 
@@ -673,7 +721,7 @@ task docker-build    # build Docker image locally (goreleaser snapshot)
 ```
 cmd/                    CLI commands (cobra)
 internal/
-  config/               krmgen.yaml parsing and processing
+  config/               krmgen.yaml parsing and processing; variables of the template command
   helm/                 helm chart rendering (embedded library by default, external helm opt-in; HTTP + OCI generators)
   kustomize/            Kustomize execution (embedded library by default, external kubectl opt-in)
   redact/               masks URL passwords in anything krmgen prints

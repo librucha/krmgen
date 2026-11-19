@@ -13,12 +13,18 @@ Version: applies to krmgen 1.0.x (current release 1.0.2). Status: current — th
 | Command | Aliases | Description |
 |---|---|---|
 | `krmgen generate <path>` | `g` | Render KRM YAML from the config found in `<path>` |
+| `krmgen template <template>` | none | Evaluate one Go template string and print the result (see The `template` command, below) |
 
 ### Flags
 
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--skip` | string array, repeatable | none | Glob pattern of files copied without Go template evaluation |
+| Flag | Command | Type | Default | Description |
+|---|---|---|---|---|
+| `--skip` | `generate` | string array, repeatable | none | Glob pattern of files copied without Go template evaluation |
+| `--var` | `template` | `key=value`, repeatable | none | Variable exposed as `.Values.<key>`; overrides the same key from `--var-file` |
+| `--var-file` | `template` | path, at most once | none | `.yaml`, `.yml` or `.json` file whose top-level mapping is exposed under `.Values` |
+
+A flag is accepted only by the command it is listed for: `generate` has no
+`--var` / `--var-file`, and `template` has no `--skip`.
 
 ### Streams
 
@@ -36,12 +42,18 @@ and still receive valid YAML on stdout. This separation is a guarantee for
 `generate`, not an implementation detail — it does not extend to help output
 or other commands.
 
+A successful `template` run writes the evaluated text to stdout byte for
+byte: no newline is appended, and one the template produced is kept. That
+text is whatever the template yields, not necessarily YAML. A failing
+`template` run writes nothing to stdout — the result is buffered and printed
+only once evaluation has finished.
+
 ### Exit codes
 
 | Code | Meaning |
 |---|---|
-| 0 | Rendering succeeded; YAML written to stdout |
-| 1 | Any error: missing argument, unreadable path, template failure, helm or kustomize failure |
+| 0 | `generate`: rendering succeeded, YAML written to stdout. `template`: evaluation succeeded, result written to stdout |
+| 1 | Any error: missing or surplus argument, unreadable path, invalid `--var` or `--var-file`, template failure, helm or kustomize failure |
 
 A failure to remove the working directory during cleanup never affects the exit
 code. It is reported as a stderr warning (see Working directory lifecycle, below),
@@ -162,6 +174,70 @@ an error. Go's `text/template` reports an execution failure with the template
 expression and its position, never the output buffer, so the
 `template evaluation of file %s failed` error in `cmd/generate.go` does not
 carry partially rendered output.
+
+### The `template` command
+
+`krmgen template <template>` evaluates its single argument as a Go template
+and prints the result. It reads no source directory and no `krmgen.yaml`, and
+runs neither helm nor kustomize.
+
+```bash
+krmgen template '{{ krmgenGenerated }}'
+# krmgen-2.0.3
+
+krmgen template --var-file variables.yaml --var ns='black widow' --var env=prod \
+  '{{ .Values.ns }}/{{ .Values.env }}'
+# black widow/prod
+```
+
+- **Same engine as `generate`.** The argument goes through the same
+  evaluation (`template.EvalGoTemplates`), so every function of Section 4 is
+  available and `missingkey=error` applies. `readF` still resolves against the
+  process working directory.
+- **Exactly one argument.** None, or more than one, is an error
+  (`exactly one <template> argument required, got <n>`). An empty or
+  all-whitespace argument is printed back unchanged, exit 0. A template that
+  starts with a dash has to follow `--`, otherwise cobra parses it as a flag:
+  `krmgen template -- '-{{ .Values.x }}'`.
+- **Variables live under `.Values`**, the key `generate` uses for `values:`,
+  so an expression copied from a file of a krmgen project evaluates unchanged.
+  With no variables passed `.Values` is an empty mapping.
+- **`--var-file`** names one file with the extension `.yaml`, `.yml` or
+  `.json` (case-insensitive); any other extension is an error. All three are
+  decoded as YAML, so the types match `values:` — in particular a JSON number
+  such as `1000000` stays an integer and prints as `1000000`, not `1e+06` —
+  and a `.json` file holding YAML-only syntax is not rejected. The top level
+  must be a mapping with string keys; an empty file, or one holding only
+  comments, declares no variables. Of a multi-document file only the first
+  document is read. Passing the flag twice is an error
+  (`--var-file given <n> times, only one variables file is supported`), not
+  "last one wins".
+- **`--var key=value`** is split at the first `=`, so the value may be empty
+  and may itself contain `=` or commas. The value is always a string:
+  `--var replicas=3` yields `"3"`. Typed values, lists and mappings come from
+  the file.
+- **Precedence.** `--var` overrides the same key from `--var-file`; a later
+  `--var` overrides an earlier one.
+- **A dotted key addresses a nested mapping.** `--var db.host=x` sets
+  `.Values.db.host`, creating `db` when it is missing and leaving its other
+  keys alone when it came from the file. If a level on the way exists and is
+  not a mapping — the file has `db: prod-db` — the run fails
+  (`invalid --var "db.host=x": db is already set and is not a mapping`)
+  rather than replacing it. The last segment is always assigned, even over a
+  mapping: `--var db=x` replaces a `db` mapping with the string `x`.
+- **Variables are literal.** Neither a `--var` value nor a string in the
+  file is evaluated as a template, unlike `values:` in a KrmGen file: a file
+  value of `'{{ krmgenVer }}'` is that text.
+- **Errors.** No `=` in a `--var`, an empty key, or an empty key segment
+  (`a..b`) is an error that quotes the offending argument. A reference to a
+  variable nobody passed fails with the template engine's missing-key error
+  plus `(variable not passed: use --var key=value or --var-file)`. Every
+  error passes through the same URL-credential masking as `generate`'s.
+- **Nothing is hidden.** What a function returns — a secret read by `azSec`,
+  for instance — is printed to stdout in clear text, exactly as `generate`
+  would write it into a manifest. A `--var` value is part of the command line,
+  so it is visible in shell history and in the process table while krmgen
+  runs.
 
 ## 2. Configuration
 
