@@ -28,14 +28,18 @@ jobs:
           go-version-file: go.mod
 
       # Built from source with the Go from go.mod rather than pulled as a
-      # prebuilt binary: the released v2.6.2 binaries are built with go1.25
-      # and refuse to lint a module targeting a newer Go ("the Go language
-      # version used to build golangci-lint is lower than the targeted Go
-      # version"). Pinned to the same v2.6.2 that Taskfile.yaml installs, so
-      # CI and developer runs agree on findings; see .golangci.yml for the
-      # linter set.
+      # prebuilt binary: a golangci-lint built with an older Go refuses to
+      # lint a module targeting a newer one ("the Go language version used to
+      # build golangci-lint is lower than the targeted Go version"). Building
+      # with the right Go is not enough on its own, though: the release also
+      # has to bundle a golang.org/x/tools that reads that Go's export data.
+      # v2.6.2 (x/tools v0.38.0) fails on go1.27 with "export data version 4
+      # is greater than maximum supported version 2", so a bump of the go
+      # directive in go.mod may need a bump here too. Pinned to the same
+      # v2.15.0 that Taskfile.yaml installs, so CI and developer runs agree
+      # on findings; see .golangci.yml for the linter set.
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
       - name: golangci-lint
         run: golangci-lint run ./...
