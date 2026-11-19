@@ -733,7 +733,7 @@ pipes its output through — and neither has an equivalent when krmgen calls
 `helm.sh/helm/v4/pkg/action` directly. This is permanent, not a gap phase 6
 is expected to close later; see Section 6.
 
-krmgen embeds `sigs.k8s.io/kustomize/api` v0.21.1 (pinned in `go.mod`).
+krmgen embeds `sigs.k8s.io/kustomize/api` v0.21.2 (pinned in `go.mod`).
 Parity between the embedded backend and the external `kubectl` backend — see
 Section 6 — is enforced by `TestGolden_BothBackendsAgree` and
 `TestGolden_BothBackendsAgreeOnErrors` (`test/golden/harness_test.go`) and was

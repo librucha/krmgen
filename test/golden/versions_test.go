@@ -26,7 +26,7 @@ import (
 // scenarios that never set KRMGEN_HELM_EXECUTABLE and render exclusively
 // through the embedded library - fails if the `helm` binary on PATH drifts
 // from anchorHelmVersion. The two helm anchors agree
-// today (both name v4.3.0) by coincidence, not by construction: nothing keeps
+// today (both name v4.3.2) by coincidence, not by construction: nothing keeps
 // go.mod's helm.sh/helm/v4 dependency and the reference external binary in
 // lockstep. The installed kubectl's Kustomize version still has to match a
 // reference too, because the same
@@ -41,9 +41,9 @@ import (
 // installed on the machine that generated them.
 //
 // anchorHelmVersion is the `helm version --short` output of that reference
-// helm (a released v4.3.0 build; the "+g..." suffix is helm's normal
+// helm (a released v4.3.2 build; the "+g..." suffix is helm's normal
 // embedded-commit build metadata, not a dev build).
-const anchorHelmVersion = "v4.3.0+gbec5b06"
+const anchorHelmVersion = "v4.3.2+g8346aaa"
 
 // anchorKustomizeVersion is the "Kustomize Version" line reported by
 // `kubectl version --client` for the reference kubectl (v1.36.3). It only
@@ -112,7 +112,7 @@ func runningHelmVersion() (string, error) {
 // into krmgen. Output was verified byte-identical between this version and
 // the kubectl anchored above; a different pair may render differently, and
 // then a golden diff is a tooling change, not a product regression.
-const anchorKustomizeAPIVersion = "v0.21.1"
+const anchorKustomizeAPIVersion = "v0.21.2"
 
 // TestEmbeddedKustomizeMatchesTheAnchor reads the module dependency versions
 // embedded in the built krmgen binary (the same one the golden scenarios
@@ -156,7 +156,7 @@ func TestEmbeddedKustomizeMatchesTheAnchor(t *testing.T) {
 // KRMGEN_HELM_EXECUTABLE selects the binary renderer. Before this phase the
 // two happened to be the same helm build, so this distinction was invisible;
 // now that the embedded library is the default, only this anchor governs it.
-const anchorHelmLibraryVersion = "v4.3.0"
+const anchorHelmLibraryVersion = "v4.3.2"
 
 // TestEmbeddedHelmMatchesTheAnchor is the helm sibling of
 // TestEmbeddedKustomizeMatchesTheAnchor above - same reasoning, same
